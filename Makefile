@@ -1,7 +1,7 @@
 .PHONY: install
 install:
 	python3 -m pip install --require-virtualenv --upgrade pip
-	python3 -m pip install --require-virtualenv --upgrade -e . --config-settings editable_mode=compat $(PIP_INSTALL_ARGS)
+	python3 -m pip install --require-virtualenv --upgrade -e . $(PIP_INSTALL_ARGS)
 
 .PHONY: install_dev
 install_dev:

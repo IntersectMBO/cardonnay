@@ -37,8 +37,15 @@ repository = "https://github.com/IntersectMBO/cardonnay"
 [project.scripts]
 cardonnay = "cardonnay.main:main"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
-where = ["cardonnay_scripts", "cardonnay"]
+where = ["src"]
+include = ["cardonnay", "cardonnay_scripts"]
+
+[tool.setuptools.package-data]
+"cardonnay_scripts" = ["scripts/**/*"]
 
 [tool.setuptools_scm]
 
@@ -63,6 +70,7 @@ warn_unused_configs = true
 warn_return_any = true
 
 [tool.pyrefly]
+project_includes = ["src"]
 ignore_errors_in_generated_code = true
 use_untyped_imports = true
 ignore_missing_source = true
