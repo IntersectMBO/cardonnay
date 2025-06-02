@@ -26,6 +26,7 @@ dynamic = ["version"]
 dependencies = [
     "setuptools < 80.9",
     "supervisor",
+    "click",
 ]
 
 [project.urls]
@@ -34,7 +35,7 @@ documentation = "https://github.com/IntersectMBO/cardonnay"
 repository = "https://github.com/IntersectMBO/cardonnay"
 
 [project.scripts]
-cardonnay = "cardonnay.cli:main"
+cardonnay = "cardonnay.main:main"
 
 [tool.setuptools.packages.find]
 where = ["cardonnay_scripts", "cardonnay"]
