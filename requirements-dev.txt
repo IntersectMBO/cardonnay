@@ -1,4 +1,4 @@
--e . --config-settings editable_mode=compat
+-e .
 
 # linting
 mypy~=1.15.0

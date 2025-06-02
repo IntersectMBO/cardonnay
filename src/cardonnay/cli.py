@@ -3,6 +3,7 @@ import os
 import pathlib as pl
 import shutil
 
+import cardonnay_scripts
 from cardonnay import helpers
 from cardonnay import local_scripts
 from cardonnay import ttypes
@@ -169,7 +170,7 @@ def cmd_generate(
     work_dir: str,
     instance_num: int,
 ) -> int:
-    scripts_base = pl.Path(__file__).parent / "cardonnay_scripts"
+    scripts_base = pl.Path(str(cardonnay_scripts.SCRIPTS_ROOT))
 
     if list or not testnet_variant:
         return list_available_testnets(scripts_base=scripts_base)
