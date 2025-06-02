@@ -39,13 +39,14 @@
                 py3Pkgs.pip
               ];
               shellHook = ''
-                echo "Setting up Python environment..."
+                echo "Setting up environment..."
                 rm -rf .venv_nix
                 python3 -m venv .venv_nix
                 source .venv_nix/bin/activate
                 export PYTHONPATH=$(echo "$VIRTUAL_ENV"/lib/python3*/site-packages):"$PYTHONPATH"
                 make install
-                echo "Python environment ready."
+                eval "$(_CARDONNAY_COMPLETE=bash_source cardonnay)"
+                echo "Environment ready."
               '';
             };
             # Use 'venv' directly as 'default'

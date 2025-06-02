@@ -1,6 +1,3 @@
-"""Cardonnay - Cardano local testnets."""
-
-import argparse
 import logging
 import os
 import pathlib as pl
@@ -27,100 +24,6 @@ def write_env_vars(env: dict[str, str], workdir: pl.Path, instance_num: int) -> 
 def set_env_vars(env: dict[str, str]) -> None:
     for var_name, val in env.items():
         os.environ[var_name] = val
-
-
-def get_args() -> argparse.Namespace:
-    """Get command line arguments."""
-    # Arguments shared by multiple subparsers. Not using parent parser, because these options
-    # should go last in the `--help` output, and there's no possibility to influence options
-    # order with parent parsers.
-    shared_args: list[tuple[tuple, dict]] = [
-        (("-w", "--work-dir"), {"default": "", "help": "Path to working directory."}),
-        (
-            ("-i", "--instance-num"),
-            {
-                "type": int,
-                "default": 0,
-                "help": "Instance number in the sequence of cluster instances (default: 0).",
-            },
-        ),
-    ]
-
-    def add_shared_args(parser: argparse.ArgumentParser) -> None:
-        for flags, kwargs in shared_args:
-            parser.add_argument(*flags, **kwargs)
-
-    parser = argparse.ArgumentParser(description=__doc__.split("\n", maxsplit=1)[0])
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    generate_parser = subparsers.add_parser("generate", help="Generate local testnet configuration")
-    generate_parser.add_argument(
-        "-t",
-        "--testnet-variant",
-        help="Testnet variant to use.",
-    )
-    generate_parser.add_argument(
-        "-l",
-        "--list",
-        action="store_true",
-        help="List available testnet variants and exit.",
-    )
-    generate_parser.add_argument(
-        "-r",
-        "--run",
-        action="store_true",
-        help="Run the testnet immediately (default: false).",
-    )
-    generate_parser.add_argument(
-        "-c",
-        "--clean",
-        action="store_true",
-        help="Delete the destination directory if it already exists (default: false).",
-    )
-    generate_parser.add_argument(
-        "-s",
-        "--stake-pools-num",
-        type=int,
-        default=3,
-        help="Number of stake pools to create (default: 3).",
-    )
-    generate_parser.add_argument(
-        "-p",
-        "--ports-base",
-        type=int,
-        default=23000,
-        help="Base port number (default: 23000).",
-    )
-    add_shared_args(generate_parser)
-
-    control_parser = subparsers.add_parser("control", help="Control existing testnets.")
-    control_parser.add_argument(
-        "-l",
-        "--list",
-        action="store_true",
-        help="List running testnet instances.",
-    )
-    control_parser.add_argument(
-        "-s",
-        "--stop",
-        action="store_true",
-        help="Stop the running testnet.",
-    )
-    control_parser.add_argument(
-        "-r",
-        "--restart",
-        action="store_true",
-        help="Restart processes of the running testnet.",
-    )
-    control_parser.add_argument(
-        "-n",
-        "--restart-nodes",
-        action="store_true",
-        help="Restart nodes of the running testnet.",
-    )
-    add_shared_args(control_parser)
-
-    return parser.parse_args()
 
 
 def list_available_testnets(scripts_base: pl.Path) -> int:
@@ -256,24 +159,28 @@ def get_workdir(workdir: ttypes.FileType) -> pl.Path:
     return pl.Path("/var/tmp/cardonnay")
 
 
-def cmd_generate(args: argparse.Namespace) -> int:
+def cmd_generate(
+    testnet_variant: str,
+    list: bool,
+    run: bool,
+    clean: bool,
+    stake_pools_num: int,
+    ports_base: int,
+    work_dir: str,
+    instance_num: int,
+) -> int:
     scripts_base = pl.Path(__file__).parent / "cardonnay_scripts"
-    scripts_name = args.testnet_variant
 
-    if args.list or not scripts_name:
+    if list or not testnet_variant:
         return list_available_testnets(scripts_base=scripts_base)
 
-    scriptsdir = pl.Path(__file__).parent / "cardonnay_scripts" / scripts_name
-
-    instance_num = args.instance_num
-    num_pools = args.stake_pools_num
-    ports_base = args.ports_base
-    workdir = get_workdir(workdir=args.work_dir)
+    scriptsdir = scripts_base / testnet_variant
+    workdir = get_workdir(workdir=work_dir)
     workdir_abs = workdir.absolute()
-    destdir = workdir / f"cluster{instance_num}_{scripts_name}"
+    destdir = workdir / f"cluster{instance_num}_{testnet_variant}"
     destdir_abs = destdir.absolute()
 
-    if args.clean:
+    if clean:
         shutil.rmtree(destdir_abs, ignore_errors=True)
 
     if destdir.exists():
@@ -287,7 +194,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
             destdir=destdir_abs,
             scriptsdir=scriptsdir,
             instance_num=instance_num,
-            num_pools=num_pools,
+            num_pools=stake_pools_num,
             ports_base=ports_base,
         )
     except Exception:
@@ -299,7 +206,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
     LOGGER.info(f"Testnet files generated to {destdir}")
 
-    if args.run:
+    if run:
         run_retval = testnet_start(testnetdir=destdir_abs, workdir=workdir_abs, env=env)
         if run_retval > 0:
             return run_retval
@@ -311,9 +218,15 @@ def cmd_generate(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_control(args: argparse.Namespace) -> int:
-    instance_num = args.instance_num
-    workdir = get_workdir(workdir=args.work_dir)
+def cmd_control(
+    list: bool,
+    stop: bool,
+    restart: bool,
+    restart_nodes: bool,
+    work_dir: str,
+    instance_num: int,
+) -> int:
+    workdir = get_workdir(workdir=work_dir)
     workdir_abs = workdir.absolute()
     statedir = workdir_abs / f"state-cluster{instance_num}"
     env = create_env_vars(workdir=workdir_abs, instance_num=instance_num)
@@ -322,29 +235,17 @@ def cmd_control(args: argparse.Namespace) -> int:
         running_instances = get_running_instances(workdir=workdir_abs)
         LOGGER.info(f"Running instances: {running_instances}")
 
-    if args.list:
+    if list:
         _list_instances()
         return 0
 
-    if args.stop:
+    if stop:
         testnet_stop(statedir=statedir, env=env)
-    elif args.restart:
+    elif restart:
         testnet_restart_all(statedir=statedir, env=env)
-    elif args.restart_nodes:
+    elif restart_nodes:
         testnet_restart_nodes(statedir=statedir, env=env)
     else:
         _list_instances()
-
-    return 0
-
-
-def main() -> int:
-    logging.basicConfig(format="%(message)s", level=logging.INFO)
-    args = get_args()
-
-    if args.command == "generate":
-        return cmd_generate(args=args)
-    if args.command == "control":
-        return cmd_control(args=args)
 
     return 0
