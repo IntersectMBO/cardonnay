@@ -52,6 +52,18 @@ def exit_with(retval: int) -> tp.NoReturn:
     click.get_current_context().exit(retval)
 
 
+def validate_comment(
+    ctx: click.Context,  # noqa: ARG001
+    param: click.Parameter,  # noqa: ARG001
+    value: str,
+) -> str:
+    max_char = 255
+    if value is not None and len(value) > max_char:
+        err = f"must be {max_char} characters or fewer."
+        raise click.BadParameter(err)
+    return value
+
+
 @click.group()
 def main() -> None:
     """Cardonnay - Cardano local testnets."""
@@ -60,6 +72,9 @@ def main() -> None:
 
 @main.command(help="Generate local testnet configuration")
 @click.option("-t", "--testnet-variant", type=str, help="Testnet variant to use.")
+@click.option(
+    "-c", "--comment", type=str, callback=validate_comment, help="Comment for the testnet."
+)
 @click.option("-l", "--ls", is_flag=True, help="List available testnet variants and exit.")
 @click.option("-r", "--run", is_flag=True, help="Run the testnet immediately (default: false).")
 @click.option("-k", "--keep", is_flag=True, help="Don't delete destination directory if it exists.")
@@ -88,6 +103,7 @@ def main() -> None:
 def generate(
     ctx: click.Context,
     testnet_variant: str,
+    comment: str,
     ls: bool,
     run: bool,
     keep: bool,
@@ -104,6 +120,7 @@ def generate(
 
     retval = cli_generate.cmd_generate(
         testnet_variant=testnet_variant,
+        comment=comment,
         listit=ls,
         run=run,
         keep=keep,

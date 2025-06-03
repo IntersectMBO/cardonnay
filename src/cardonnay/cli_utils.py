@@ -9,6 +9,7 @@ from cardonnay import ttypes
 LOGGER = logging.getLogger(__name__)
 
 MAX_INSTANCES = 10
+TESTNET_JSON = "testnet.json"
 
 
 def create_env_vars(workdir: pl.Path, instance_num: int) -> dict[str, str]:

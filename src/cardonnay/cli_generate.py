@@ -37,8 +37,8 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
         out_list = []
         for d in avail_scripts:
             try:
-                with open(scripts_base / d / "testnet.json", encoding="utf-8") as fp_in:
-                    testnet_info = json.load(fp_in)
+                with open(scripts_base / d / cli_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
+                    testnet_info = json.load(fp_in) or {}
             except Exception:
                 testnet_info = {"name": d}
             out_list.append(testnet_info)
@@ -70,8 +70,21 @@ def testnet_start(testnetdir: pl.Path, workdir: pl.Path, env: dict) -> int:
     return 0
 
 
+def add_comment(destdir: pl.Path, comment: str) -> None:
+    testnet_file = destdir / cli_utils.TESTNET_JSON
+    try:
+        with open(testnet_file, encoding="utf-8") as fp_in:
+            testnet_info: dict = json.load(fp_in) or {}
+    except Exception:
+        testnet_info = {}
+
+    testnet_info["comment"] = comment
+    helpers.write_json(out_file=testnet_file, content=testnet_info)
+
+
 def cmd_generate(  # noqa: PLR0911, C901
     testnet_variant: str,
+    comment: str,
     listit: bool,
     run: bool,
     keep: bool,
@@ -133,6 +146,9 @@ def cmd_generate(  # noqa: PLR0911, C901
     except Exception:
         LOGGER.exception("Failure")
         return 1
+
+    if comment:
+        add_comment(destdir=destdir_abs, comment=comment)
 
     env = cli_utils.create_env_vars(workdir=workdir_abs, instance_num=instance_num)
     write_env_vars(env=env, workdir=workdir_abs, instance_num=instance_num)
