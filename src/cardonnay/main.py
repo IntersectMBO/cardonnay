@@ -116,7 +116,7 @@ def generate(
     # Check if no args were passed other than the command itself
     if not ctx.args and not any([testnet_variant, ls]):
         click.echo(ctx.get_help())
-        ctx.exit()
+        ctx.exit(1)
 
     retval = cli_generate.cmd_generate(
         testnet_variant=testnet_variant,
