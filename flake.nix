@@ -40,8 +40,7 @@
               ];
               shellHook = ''
                 echo "Setting up environment..."
-                rm -rf .venv_nix
-                python3 -m venv .venv_nix
+                [ -e .venv_nix ] || python3 -m venv .venv_nix
                 source .venv_nix/bin/activate
                 export PYTHONPATH=$(echo "$VIRTUAL_ENV"/lib/python3*/site-packages):"$PYTHONPATH"
                 make install
