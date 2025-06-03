@@ -82,13 +82,17 @@ def print_instances(workdir: pl.Path) -> None:
     for i in running_instances:
         statedir = workdir / f"state-cluster{i}"
         try:
-            with open(statedir / "testnet.json", encoding="utf-8") as fp_in:
-                testnet_info = json.load(fp_in)
+            with open(statedir / cli_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
+                testnet_info = json.load(fp_in) or {}
         except Exception:
             testnet_info = {}
         testnet_name = testnet_info.get("name") or "unknown"
         testnet_status = "started" if (statedir / STATUS_STARTED).exists() else "starting"
-        out_list.append({"instance": i, "type": testnet_name, "status": testnet_status})
+        instance_info = {"instance": i, "type": testnet_name, "status": testnet_status}
+        testnet_comment = testnet_info.get("comment")
+        if testnet_comment:
+            instance_info["comment"] = testnet_comment
+        out_list.append(instance_info)
     print(json.dumps(out_list, indent=2))
 
 
