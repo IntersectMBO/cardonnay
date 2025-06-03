@@ -61,3 +61,9 @@ def run_command(
         raise RuntimeError(msg)
 
     return p.returncode
+
+
+def read_address_from_file(addr_file: ttypes.FileType) -> str:
+    """Read address stored in file."""
+    with open(pl.Path(addr_file).expanduser(), encoding="utf-8") as in_file:
+        return in_file.read().strip()

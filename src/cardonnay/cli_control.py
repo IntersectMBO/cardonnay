@@ -4,6 +4,7 @@ import pathlib as pl
 
 from cardonnay import cli_utils
 from cardonnay import helpers
+from cardonnay import inspect_instance
 
 LOGGER = logging.getLogger(__name__)
 
@@ -101,6 +102,35 @@ def print_env_sh(env: dict[str, str]) -> None:
     print("\n".join(content))
 
 
+def print_inspect(statedir: pl.Path, verbose: int) -> None:
+    print(
+        json.dumps(inspect_instance.inspect_instance(statedir=statedir, verbose=verbose), indent=2)
+    )
+
+
+def cmd_print_env(
+    work_dir: str,
+    instance_num: int,
+) -> int:
+    workdir = cli_utils.get_workdir(workdir=work_dir).absolute()
+
+    if instance_num < 0:
+        LOGGER.error("Valid instance number is required.")
+        return 1
+
+    env = cli_utils.create_env_vars(workdir=workdir, instance_num=instance_num)
+
+    print_env_sh(env=env)
+
+    return 0
+
+
+def cmd_ls(work_dir: str) -> int:
+    workdir = cli_utils.get_workdir(workdir=work_dir).absolute()
+    print_instances(workdir=workdir)
+    return 0
+
+
 def cmd_control(
     work_dir: str,
     instance_num: int,
@@ -108,7 +138,7 @@ def cmd_control(
     restart: bool = False,
     restart_nodes: bool = False,
     inspect: bool = False,
-    print_env: bool = False,
+    verbose: int = 0,
 ) -> int:
     workdir = cli_utils.get_workdir(workdir=work_dir)
     workdir_abs = workdir.absolute()
@@ -120,26 +150,20 @@ def cmd_control(
     statedir = workdir_abs / f"state-cluster{instance_num}"
     env = cli_utils.create_env_vars(workdir=workdir_abs, instance_num=instance_num)
 
+    if instance_num not in cli_utils.get_running_instances(workdir=workdir_abs):
+        LOGGER.error("Instance is not running.")
+        return 1
+
     if stop:
         testnet_stop(statedir=statedir, env=env)
     elif restart:
         testnet_restart_all(statedir=statedir, env=env)
     elif restart_nodes:
         testnet_restart_nodes(statedir=statedir, env=env)
-    elif print_env:
-        print_env_sh(env=env)
     elif inspect:
-        pass
+        print_inspect(statedir=statedir, verbose=verbose)
     else:
         LOGGER.error("No valid action was selected.")
         return 1
 
-    return 0
-
-
-def cmd_ls(work_dir: str) -> int:
-    workdir = cli_utils.get_workdir(workdir=work_dir)
-    workdir_abs = workdir.absolute()
-
-    print_instances(workdir=workdir_abs)
     return 0
