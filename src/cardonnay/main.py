@@ -158,11 +158,31 @@ def ls(work_dir: str) -> None:
     exit_with(retval)
 
 
+@control.command(name="print-env", help="Print environment variables for the testnet.")
+@common_options_control
+@common_options
+def print_env(instance_num: int, work_dir: str) -> None:
+    retval = cli_control.cmd_print_env(work_dir=work_dir, instance_num=instance_num)
+    exit_with(retval)
+
+
+@control.command(name="inspect", help="Inspect running testnet.")
+@common_options_control
+@common_options
+@click.option("-v", "--verbose", count=True, help="Increase verbosity (use -vv for more).")
+def inspect(instance_num: int, work_dir: str, verbose: int) -> None:
+    retval = cli_control.cmd_control(
+        inspect=True,
+        work_dir=work_dir,
+        instance_num=instance_num,
+        verbose=verbose,
+    )
+    exit_with(retval)
+
+
 for name, help_text in [
     ("stop", "Stop the running testnet."),
     ("restart", "Restart all processes of the testnet."),
     ("restart_nodes", "Restart only nodes of the testnet."),
-    ("inspect", "Inspect running testnet."),
-    ("print_env", "Print environment variables for the testnet."),
 ]:
     make_control_cmd(name, help_text)
