@@ -1,5 +1,5 @@
 {
-    "name": "conway_fast",
+    "name": "conway_slow",
     "description": "Local testnet that starts in Byron era and hard-forks through all the protocol versions until it gets to Conway.",
     "control_env": {
         "DBSYNC_REPO": "will start and configure db-sync if the value is path to db-sync repository",
