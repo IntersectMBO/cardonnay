@@ -33,7 +33,6 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
         LOGGER.error(f"No script directories found in '{scripts_base}'.")
         return 1
 
-    print("Available testnet variants:")
     if verbose:
         out_list = []
         for d in avail_scripts:
@@ -45,8 +44,7 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
             out_list.append(testnet_info)
         helpers.print_json(data=out_list)
     else:
-        for d in avail_scripts:
-            print(f"  - {d}")
+        helpers.print_json(data=avail_scripts)
     return 0
 
 
