@@ -4,14 +4,12 @@ import pathlib as pl
 
 from cardonnay import cli_utils
 from cardonnay import helpers
-from cardonnay import inspect_instance
 
 LOGGER = logging.getLogger(__name__)
 
-STATUS_STARTED = "status_started"
-
 
 def testnet_stop(statedir: pl.Path, env: dict) -> int:
+    """Stop the testnet cluster by running the stop script."""
     if not cli_utils.check_env_sanity():
         return 1
 
@@ -33,6 +31,7 @@ def testnet_stop(statedir: pl.Path, env: dict) -> int:
 
 
 def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
+    """Restart the testnet nodes by running the restart script."""
     if not cli_utils.check_env_sanity():
         return 1
 
@@ -54,6 +53,7 @@ def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
 
 
 def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
+    """Restart the entire testnet cluster by running the supervisorctl command."""
     if not cli_utils.check_env_sanity():
         return 1
 
@@ -76,6 +76,7 @@ def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
 
 
 def print_instances(workdir: pl.Path) -> None:
+    """Print the list of running testnet instances."""
     running_instances = sorted(cli_utils.get_running_instances(workdir=workdir))
 
     print("Running instances:")
@@ -88,30 +89,26 @@ def print_instances(workdir: pl.Path) -> None:
         except Exception:
             testnet_info = {}
         testnet_name = testnet_info.get("name") or "unknown"
-        testnet_status = "started" if (statedir / STATUS_STARTED).exists() else "starting"
-        instance_info = {"instance": i, "type": testnet_name, "status": testnet_status}
+        testnet_state = "started" if (statedir / cli_utils.STATUS_STARTED).exists() else "starting"
+        instance_info = {"instance": i, "type": testnet_name, "state": testnet_state}
         testnet_comment = testnet_info.get("comment")
         if testnet_comment:
             instance_info["comment"] = testnet_comment
         out_list.append(instance_info)
-    print(json.dumps(out_list, indent=2))
+    helpers.print_json(data=out_list)
 
 
 def print_env_sh(env: dict[str, str]) -> None:
+    """Print environment variables in a shell-compatible format."""
     content = [f'export {var_name}="{val}"' for var_name, val in env.items()]
     print("\n".join(content))
-
-
-def print_inspect(statedir: pl.Path, verbose: int) -> None:
-    print(
-        json.dumps(inspect_instance.inspect_instance(statedir=statedir, verbose=verbose), indent=2)
-    )
 
 
 def cmd_print_env(
     work_dir: str,
     instance_num: int,
 ) -> int:
+    """Print environment variables for the specified testnet instance."""
     workdir = cli_utils.get_workdir(workdir=work_dir).absolute()
 
     if instance_num < 0:
@@ -126,20 +123,20 @@ def cmd_print_env(
 
 
 def cmd_ls(work_dir: str) -> int:
+    """List all running testnet instances."""
     workdir = cli_utils.get_workdir(workdir=work_dir).absolute()
     print_instances(workdir=workdir)
     return 0
 
 
-def cmd_control(
+def cmd_actions(
     work_dir: str,
     instance_num: int,
     stop: bool = False,
     restart: bool = False,
     restart_nodes: bool = False,
-    inspect: bool = False,
-    verbose: int = 0,
 ) -> int:
+    """Perform actions on a testnet instance."""
     workdir = cli_utils.get_workdir(workdir=work_dir)
     workdir_abs = workdir.absolute()
 
@@ -160,8 +157,6 @@ def cmd_control(
         testnet_restart_all(statedir=statedir, env=env)
     elif restart_nodes:
         testnet_restart_nodes(statedir=statedir, env=env)
-    elif inspect:
-        print_inspect(statedir=statedir, verbose=verbose)
     else:
         LOGGER.error("No valid action was selected.")
         return 1

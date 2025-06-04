@@ -12,6 +12,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def write_env_vars(env: dict[str, str], workdir: pl.Path, instance_num: int) -> None:
+    """Write environment variables to a file for sourcing later."""
     sfile = workdir / f".source_cluster{instance_num}"
     content = [f'export {var_name}="{val}"' for var_name, val in env.items()]
     sfile.write_text("\n".join(content))
@@ -42,7 +43,7 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
             except Exception:
                 testnet_info = {"name": d}
             out_list.append(testnet_info)
-        print(json.dumps(out_list, indent=2))
+        helpers.print_json(data=out_list)
     else:
         for d in avail_scripts:
             print(f"  - {d}")
@@ -50,6 +51,7 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
 
 
 def testnet_start(testnetdir: pl.Path, workdir: pl.Path, env: dict) -> int:
+    """Start the testnet cluster using the start script."""
     if not cli_utils.check_env_sanity():
         return 1
 
@@ -71,6 +73,7 @@ def testnet_start(testnetdir: pl.Path, workdir: pl.Path, env: dict) -> int:
 
 
 def add_comment(destdir: pl.Path, comment: str) -> None:
+    """Add a comment to the testnet info file in the destination directory."""
     testnet_file = destdir / cli_utils.TESTNET_JSON
     try:
         with open(testnet_file, encoding="utf-8") as fp_in:
@@ -94,6 +97,7 @@ def cmd_generate(  # noqa: PLR0911, C901
     instance_num: int,
     verbose: int,
 ) -> int:
+    """Generate a testnet cluster with the specified parameters."""
     scripts_base = pl.Path(str(cardonnay_scripts.SCRIPTS_ROOT))
 
     if listit or not testnet_variant:
@@ -104,16 +108,14 @@ def cmd_generate(  # noqa: PLR0911, C901
         LOGGER.error(f"Testnet variant '{testnet_variant}' does not exist in '{scripts_base}'.")
         return 1
 
-    workdir = cli_utils.get_workdir(workdir=work_dir)
-    workdir_abs = workdir.absolute()
-    destdir = workdir / f"cluster{instance_num}_{testnet_variant}"
-    destdir_abs = destdir.absolute()
-
     if instance_num > cli_utils.MAX_INSTANCES:
         LOGGER.error(
             f"Instance number {instance_num} exceeds maximum allowed {cli_utils.MAX_INSTANCES}."
         )
         return 1
+
+    workdir = cli_utils.get_workdir(workdir=work_dir)
+    workdir_abs = workdir.absolute()
 
     avail_instances_gen = cli_utils.get_available_instances(workdir=workdir_abs)
     if instance_num < 0:
@@ -125,6 +127,8 @@ def cmd_generate(  # noqa: PLR0911, C901
     elif instance_num not in avail_instances_gen:
         LOGGER.error(f"Instance number {instance_num} is already in use.")
         return 1
+    destdir = workdir / f"cluster{instance_num}_{testnet_variant}"
+    destdir_abs = destdir.absolute()
 
     if not keep:
         shutil.rmtree(destdir_abs, ignore_errors=True)

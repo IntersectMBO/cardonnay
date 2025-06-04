@@ -7,12 +7,13 @@ import click
 
 from cardonnay import cli_control
 from cardonnay import cli_generate
+from cardonnay import cli_inspect
 from cardonnay import cli_utils
 
 LOGGER = logging.getLogger(__name__)
 
 
-def common_options(func: tp.Callable) -> tp.Callable:
+def common_options_dir(func: tp.Callable) -> tp.Callable:
     """Add shared options using a decorator."""
     for opt in reversed(
         [
@@ -30,7 +31,7 @@ def common_options(func: tp.Callable) -> tp.Callable:
     return func
 
 
-def common_options_control(func: tp.Callable) -> tp.Callable:
+def common_options_instance(func: tp.Callable) -> tp.Callable:
     """Add shared options to control group using a decorator."""
     for opt in reversed(
         [
@@ -98,7 +99,7 @@ def main() -> None:
     "-p", "--ports-base", type=int, default=23000, show_default=True, help="Base port number."
 )
 @click.option("-v", "--verbose", count=True, help="Increase verbosity (use -vv for more).")
-@common_options
+@common_options_dir
 @click.pass_context
 def generate(
     ctx: click.Context,
@@ -138,12 +139,12 @@ def control() -> None:
     """Control interface for Cardonnay instances."""
 
 
-def make_control_cmd(flag_name: str, help_text: str) -> None:
+def make_actions_cmd(flag_name: str, help_text: str) -> None:
     @control.command(name=flag_name.replace("_", "-"), help=help_text)
-    @common_options_control
-    @common_options
+    @common_options_instance
+    @common_options_dir
     def cmd(instance_num: int, work_dir: str) -> None:
-        retval = cli_control.cmd_control(
+        retval = cli_control.cmd_actions(
             **{flag_name: True},
             work_dir=work_dir,
             instance_num=instance_num,
@@ -152,31 +153,17 @@ def make_control_cmd(flag_name: str, help_text: str) -> None:
 
 
 @control.command(name="ls", help="List running testnet instances.")
-@common_options
-def ls(work_dir: str) -> None:
+@common_options_dir
+def control_ls(work_dir: str) -> None:
     retval = cli_control.cmd_ls(work_dir=work_dir)
     exit_with(retval)
 
 
 @control.command(name="print-env", help="Print environment variables for the testnet.")
-@common_options_control
-@common_options
-def print_env(instance_num: int, work_dir: str) -> None:
+@common_options_instance
+@common_options_dir
+def control_print_env(instance_num: int, work_dir: str) -> None:
     retval = cli_control.cmd_print_env(work_dir=work_dir, instance_num=instance_num)
-    exit_with(retval)
-
-
-@control.command(name="inspect", help="Inspect running testnet.")
-@common_options_control
-@common_options
-@click.option("-v", "--verbose", count=True, help="Increase verbosity (use -vv for more).")
-def inspect(instance_num: int, work_dir: str, verbose: int) -> None:
-    retval = cli_control.cmd_control(
-        inspect=True,
-        work_dir=work_dir,
-        instance_num=instance_num,
-        verbose=verbose,
-    )
     exit_with(retval)
 
 
@@ -185,4 +172,53 @@ for name, help_text in [
     ("restart", "Restart all processes of the testnet."),
     ("restart_nodes", "Restart only nodes of the testnet."),
 ]:
-    make_control_cmd(name, help_text)
+    make_actions_cmd(name, help_text)
+
+
+@main.group(help="Inspect a testnet instance.")
+def inspect() -> None:
+    """Control interface for Cardonnay instances."""
+
+
+@inspect.command(name="faucet", help="Inspect faucet.")
+@common_options_instance
+@common_options_dir
+def inspect_faucet(instance_num: int, work_dir: str) -> None:
+    retval = cli_inspect.cmd_faucet(
+        work_dir=work_dir,
+        instance_num=instance_num,
+    )
+    exit_with(retval)
+
+
+@inspect.command(name="pools", help="Inspect pools.")
+@common_options_instance
+@common_options_dir
+def inspect_pools(instance_num: int, work_dir: str) -> None:
+    retval = cli_inspect.cmd_pools(
+        work_dir=work_dir,
+        instance_num=instance_num,
+    )
+    exit_with(retval)
+
+
+@inspect.command(name="status", help="Inspect status.")
+@common_options_instance
+@common_options_dir
+def inspect_status(instance_num: int, work_dir: str) -> None:
+    retval = cli_inspect.cmd_status(
+        work_dir=work_dir,
+        instance_num=instance_num,
+    )
+    exit_with(retval)
+
+
+@inspect.command(name="config", help="Inspect configuration.")
+@common_options_instance
+@common_options_dir
+def inspect_config(instance_num: int, work_dir: str) -> None:
+    retval = cli_inspect.cmd_config(
+        work_dir=work_dir,
+        instance_num=instance_num,
+    )
+    exit_with(retval)
