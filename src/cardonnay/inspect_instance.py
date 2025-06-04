@@ -1,11 +1,11 @@
-import logging  # noqa: I001
 import contextlib
+import json
+import logging
 import pathlib as pl
 import typing as tp
-import json
 
-from cardonnay import helpers
 from cardonnay import cli_utils
+from cardonnay import helpers
 
 LOGGER = logging.getLogger(__name__)
 
