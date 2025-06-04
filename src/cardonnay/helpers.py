@@ -3,6 +3,7 @@ import logging
 import pathlib as pl
 import subprocess
 import sys
+import time
 
 from cardonnay import ttypes
 
@@ -68,7 +69,66 @@ def run_command(
     return p.returncode
 
 
+def run_detached_command(
+    command: str | list[str],
+    logfile: pl.Path,
+    workdir: str | pl.Path = "",
+) -> subprocess.Popen:
+    """Start command in background, detached from the current process.
+
+    Args:
+        command: Command to run.
+        workdir: Optional working directory.
+        logfile: File where both stdout and stderr are redirected.
+    """
+    cmd = command.split() if isinstance(command, str) else command
+
+    # Full detachment on Unix-like systems
+    with open(logfile, "a") as logout:
+        p = subprocess.Popen(
+            cmd,
+            cwd=pl.Path(workdir) if workdir else None,
+            stdout=logout,
+            stderr=logout,
+            stdin=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
+        )
+
+    return p
+
+
 def read_from_file(file: ttypes.FileType) -> str:
     """Read address stored in file."""
     with open(pl.Path(file).expanduser(), encoding="utf-8") as in_file:
         return in_file.read().strip()
+
+
+def wait_for_file(
+    file: ttypes.FileType,
+    timeout: float,
+    poll_interval: float = 0.2,
+) -> bool:
+    """Wait for a file to appear within a time limit.
+
+    Args:
+        file: Path to the target file.
+        timeout: Time limit in seconds.
+        poll_interval: Time between checks (default 0.2s).
+
+    Returns:
+        True if file appeared in time, False otherwise.
+    """
+    file = pl.Path(file)
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        try:
+            if file.is_file():
+                return True
+        except FileNotFoundError:
+            pass  # Any parent component may not exist yet
+
+        time.sleep(poll_interval)
+
+    return False
