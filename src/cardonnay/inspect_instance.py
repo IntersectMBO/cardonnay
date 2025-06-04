@@ -120,7 +120,12 @@ def get_testnet_info(statedir: pl.Path) -> dict:
     testnet_name = testnet_info.get("name") or "unknown"
     testnet_instance = int(statedir.name.replace("state-cluster", ""))
 
-    instance_info = {"instance": testnet_instance, "type": testnet_name, "state": testnet_state}
+    instance_info = {
+        "instance": testnet_instance,
+        "type": testnet_name,
+        "state": testnet_state,
+        "dir": str(statedir),
+    }
     testnet_comment = testnet_info.get("comment")
     if testnet_comment:
         instance_info["comment"] = testnet_comment
