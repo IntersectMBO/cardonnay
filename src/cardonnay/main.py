@@ -6,7 +6,7 @@ import typing as tp
 import click
 
 from cardonnay import cli_control
-from cardonnay import cli_generate
+from cardonnay import cli_create
 from cardonnay import cli_inspect
 from cardonnay import cli_utils
 
@@ -71,7 +71,7 @@ def main() -> None:
     logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
-@main.command(help="Generate local testnet configuration")
+@main.command(help="Create a local testnet.")
 @click.option("-t", "--testnet-variant", type=str, help="Testnet variant to use.")
 @click.option(
     "-c", "--comment", type=str, callback=validate_comment, help="Comment for the testnet."
@@ -101,7 +101,7 @@ def main() -> None:
 @click.option("-v", "--verbose", count=True, help="Increase verbosity (use -vv for more).")
 @common_options_dir
 @click.pass_context
-def generate(
+def create(
     ctx: click.Context,
     testnet_variant: str,
     comment: str,
@@ -119,7 +119,7 @@ def generate(
         click.echo(ctx.get_help())
         ctx.exit(1)
 
-    retval = cli_generate.cmd_generate(
+    retval = cli_create.cmd_create(
         testnet_variant=testnet_variant,
         comment=comment,
         listit=ls,

@@ -83,7 +83,7 @@ def add_comment(destdir: pl.Path, comment: str) -> None:
     helpers.write_json(out_file=testnet_file, content=testnet_info)
 
 
-def cmd_generate(  # noqa: PLR0911, C901
+def cmd_create(  # noqa: PLR0911, C901
     testnet_variant: str,
     comment: str,
     listit: bool,
@@ -95,7 +95,7 @@ def cmd_generate(  # noqa: PLR0911, C901
     instance_num: int,
     verbose: int,
 ) -> int:
-    """Generate a testnet cluster with the specified parameters."""
+    """Create a testnet cluster with the specified parameters."""
     scripts_base = pl.Path(str(cardonnay_scripts.SCRIPTS_ROOT))
 
     if listit or not testnet_variant:
