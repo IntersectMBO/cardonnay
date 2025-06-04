@@ -87,7 +87,7 @@ def cmd_create(  # noqa: PLR0911, C901
     testnet_variant: str,
     comment: str,
     listit: bool,
-    run: bool,
+    generate_only: bool,
     keep: bool,
     stake_pools_num: int,
     ports_base: int,
@@ -157,13 +157,13 @@ def cmd_create(  # noqa: PLR0911, C901
 
     LOGGER.info(f"Testnet files generated to {destdir}")
 
-    if run:
-        run_retval = testnet_start(testnetdir=destdir_abs, workdir=workdir_abs, env=env)
-        if run_retval > 0:
-            return run_retval
-    else:
+    if generate_only:
         LOGGER.info("You can start the testnet with:")
         LOGGER.info(f"source {workdir}/.source_cluster{instance_num}")
         LOGGER.info(f"{destdir}/start-cluster")
+    else:
+        run_retval = testnet_start(testnetdir=destdir_abs, workdir=workdir_abs, env=env)
+        if run_retval > 0:
+            return run_retval
 
     return 0
