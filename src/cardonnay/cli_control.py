@@ -79,7 +79,6 @@ def print_instances(workdir: pl.Path) -> None:
     """Print the list of running testnet instances."""
     running_instances = sorted(cli_utils.get_running_instances(workdir=workdir))
 
-    print("Running instances:")
     out_list = []
     for i in running_instances:
         statedir = workdir / f"state-cluster{i}"
