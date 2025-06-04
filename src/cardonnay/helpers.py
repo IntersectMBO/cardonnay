@@ -16,6 +16,11 @@ def write_json(out_file: pl.Path, content: dict) -> pl.Path:
     return out_file
 
 
+def print_json(data: dict | list) -> None:
+    """Print JSON data to stdout in a pretty format."""
+    print(json.dumps(data, indent=2))
+
+
 def run_command(
     command: str | list,
     workdir: ttypes.FileType = "",
@@ -63,7 +68,7 @@ def run_command(
     return p.returncode
 
 
-def read_address_from_file(addr_file: ttypes.FileType) -> str:
+def read_from_file(file: ttypes.FileType) -> str:
     """Read address stored in file."""
-    with open(pl.Path(addr_file).expanduser(), encoding="utf-8") as in_file:
+    with open(pl.Path(file).expanduser(), encoding="utf-8") as in_file:
         return in_file.read().strip()
