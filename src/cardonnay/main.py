@@ -77,6 +77,12 @@ def main() -> None:
     "-c", "--comment", type=str, callback=validate_comment, help="Comment for the testnet."
 )
 @click.option("-l", "--ls", is_flag=True, help="List available testnet variants and exit.")
+@click.option(
+    "-b",
+    "--background",
+    is_flag=True,
+    help="Start the testnet script in background (default: false).",
+)
 @click.option("-g", "--generate-only", is_flag=True, help="Don't run the testnet (default: false).")
 @click.option("-k", "--keep", is_flag=True, help="Don't delete destination directory if it exists.")
 @click.option(
@@ -106,6 +112,7 @@ def create(
     testnet_variant: str,
     comment: str,
     ls: bool,
+    background: bool,
     generate_only: bool,
     keep: bool,
     instance_num: int,
@@ -123,6 +130,7 @@ def create(
         testnet_variant=testnet_variant,
         comment=comment,
         listit=ls,
+        background=background,
         generate_only=generate_only,
         keep=keep,
         stake_pools_num=stake_pools_num,

@@ -48,7 +48,14 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
     return 0
 
 
-def testnet_start(testnetdir: pl.Path, workdir: pl.Path, env: dict) -> int:
+def testnet_start(
+    testnetdir: pl.Path,
+    workdir: pl.Path,
+    testnet_variant: str,
+    env: dict,
+    instance_num: int,
+    background: bool,
+) -> int:
     """Start the testnet cluster using the start script."""
     if not cli_utils.check_env_sanity():
         return 1
@@ -60,12 +67,35 @@ def testnet_start(testnetdir: pl.Path, workdir: pl.Path, env: dict) -> int:
 
     cli_utils.set_env_vars(env=env)
 
-    LOGGER.info(f"Starting cluster with `{start_script}`.")
-    try:
-        helpers.run_command(str(start_script), workdir=workdir)
-    except RuntimeError:
-        LOGGER.exception("Failed to start testnet")
-        return 1
+    if background:
+        logfile = workdir / f"start_cluster{instance_num}.log"
+        logfile.unlink(missing_ok=True)
+        start_process = helpers.run_detached_command(
+            command=str(start_script), logfile=logfile, workdir=workdir
+        )
+
+        statedir = workdir / f"state-cluster{instance_num}"
+        helpers.wait_for_file(file=statedir / "supervisord.sock", timeout=10)
+
+        pidfile = workdir / f"start_cluster{instance_num}.pid"
+        pidfile.unlink(missing_ok=True)
+        pidfile.write_text(str(start_process.pid))
+
+        instance_info = {
+            "instance": instance_num,
+            "type": testnet_variant,
+            "state": "starting",
+            "pid": start_process.pid,
+            "logfile": str(logfile),
+        }
+        helpers.print_json(instance_info)
+    else:
+        LOGGER.info(f"Starting cluster with `{start_script}`.")
+        try:
+            helpers.run_command(command=str(start_script), workdir=workdir)
+        except RuntimeError:
+            LOGGER.exception("Failed to start testnet")
+            return 1
 
     return 0
 
@@ -87,6 +117,7 @@ def cmd_create(  # noqa: PLR0911, C901
     testnet_variant: str,
     comment: str,
     listit: bool,
+    background: bool,
     generate_only: bool,
     keep: bool,
     stake_pools_num: int,
@@ -155,14 +186,21 @@ def cmd_create(  # noqa: PLR0911, C901
     env = cli_utils.create_env_vars(workdir=workdir_abs, instance_num=instance_num)
     write_env_vars(env=env, workdir=workdir_abs, instance_num=instance_num)
 
-    LOGGER.info(f"Testnet files generated to {destdir}")
+    LOGGER.debug(f"Testnet files generated to {destdir}")
 
     if generate_only:
         LOGGER.info("You can start the testnet with:")
         LOGGER.info(f"source {workdir}/.source_cluster{instance_num}")
         LOGGER.info(f"{destdir}/start-cluster")
     else:
-        run_retval = testnet_start(testnetdir=destdir_abs, workdir=workdir_abs, env=env)
+        run_retval = testnet_start(
+            testnetdir=destdir_abs,
+            workdir=workdir_abs,
+            testnet_variant=testnet_variant,
+            env=env,
+            instance_num=instance_num,
+            background=background,
+        )
         if run_retval > 0:
             return run_retval
 

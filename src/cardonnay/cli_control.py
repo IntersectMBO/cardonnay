@@ -1,6 +1,10 @@
+import contextlib
 import json
 import logging
+import os
 import pathlib as pl
+import signal
+import time
 
 from cardonnay import cli_utils
 from cardonnay import helpers
@@ -28,6 +32,19 @@ def testnet_stop(statedir: pl.Path, env: dict) -> int:
         return 1
 
     return 0
+
+
+def kill_starting_testnet(pidfile: pl.Path) -> None:
+    """Kill a starting testnet process if the PID file exists."""
+    if not pidfile.exists():
+        return
+
+    with contextlib.suppress(Exception):
+        pid = int(helpers.read_from_file(pidfile))
+        os.kill(pid, signal.SIGTERM)
+        time.sleep(0.5)
+
+    pidfile.unlink()
 
 
 def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
@@ -151,6 +168,7 @@ def cmd_actions(
         return 1
 
     if stop:
+        kill_starting_testnet(pidfile=workdir_abs / f"start_cluster{instance_num}.pid")
         testnet_stop(statedir=statedir, env=env)
     elif restart:
         testnet_restart_all(statedir=statedir, env=env)
