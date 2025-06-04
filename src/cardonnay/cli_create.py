@@ -83,11 +83,11 @@ def add_comment(destdir: pl.Path, comment: str) -> None:
     helpers.write_json(out_file=testnet_file, content=testnet_info)
 
 
-def cmd_generate(  # noqa: PLR0911, C901
+def cmd_create(  # noqa: PLR0911, C901
     testnet_variant: str,
     comment: str,
     listit: bool,
-    run: bool,
+    generate_only: bool,
     keep: bool,
     stake_pools_num: int,
     ports_base: int,
@@ -95,7 +95,7 @@ def cmd_generate(  # noqa: PLR0911, C901
     instance_num: int,
     verbose: int,
 ) -> int:
-    """Generate a testnet cluster with the specified parameters."""
+    """Create a testnet cluster with the specified parameters."""
     scripts_base = pl.Path(str(cardonnay_scripts.SCRIPTS_ROOT))
 
     if listit or not testnet_variant:
@@ -157,13 +157,13 @@ def cmd_generate(  # noqa: PLR0911, C901
 
     LOGGER.info(f"Testnet files generated to {destdir}")
 
-    if run:
-        run_retval = testnet_start(testnetdir=destdir_abs, workdir=workdir_abs, env=env)
-        if run_retval > 0:
-            return run_retval
-    else:
+    if generate_only:
         LOGGER.info("You can start the testnet with:")
         LOGGER.info(f"source {workdir}/.source_cluster{instance_num}")
         LOGGER.info(f"{destdir}/start-cluster")
+    else:
+        run_retval = testnet_start(testnetdir=destdir_abs, workdir=workdir_abs, env=env)
+        if run_retval > 0:
+            return run_retval
 
     return 0

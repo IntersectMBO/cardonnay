@@ -6,7 +6,7 @@ import typing as tp
 import click
 
 from cardonnay import cli_control
-from cardonnay import cli_generate
+from cardonnay import cli_create
 from cardonnay import cli_inspect
 from cardonnay import cli_utils
 
@@ -71,13 +71,13 @@ def main() -> None:
     logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
-@main.command(help="Generate local testnet configuration")
+@main.command(help="Create a local testnet.")
 @click.option("-t", "--testnet-variant", type=str, help="Testnet variant to use.")
 @click.option(
     "-c", "--comment", type=str, callback=validate_comment, help="Comment for the testnet."
 )
 @click.option("-l", "--ls", is_flag=True, help="List available testnet variants and exit.")
-@click.option("-r", "--run", is_flag=True, help="Run the testnet immediately (default: false).")
+@click.option("-g", "--generate-only", is_flag=True, help="Don't run the testnet (default: false).")
 @click.option("-k", "--keep", is_flag=True, help="Don't delete destination directory if it exists.")
 @click.option(
     "-i",
@@ -101,12 +101,12 @@ def main() -> None:
 @click.option("-v", "--verbose", count=True, help="Increase verbosity (use -vv for more).")
 @common_options_dir
 @click.pass_context
-def generate(
+def create(
     ctx: click.Context,
     testnet_variant: str,
     comment: str,
     ls: bool,
-    run: bool,
+    generate_only: bool,
     keep: bool,
     instance_num: int,
     stake_pools_num: int,
@@ -119,11 +119,11 @@ def generate(
         click.echo(ctx.get_help())
         ctx.exit(1)
 
-    retval = cli_generate.cmd_generate(
+    retval = cli_create.cmd_create(
         testnet_variant=testnet_variant,
         comment=comment,
         listit=ls,
-        run=run,
+        generate_only=generate_only,
         keep=keep,
         stake_pools_num=stake_pools_num,
         ports_base=ports_base,
