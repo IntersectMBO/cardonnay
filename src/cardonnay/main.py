@@ -9,6 +9,7 @@ from cardonnay import cli_control
 from cardonnay import cli_create
 from cardonnay import cli_inspect
 from cardonnay import cli_utils
+from cardonnay import color_logger
 
 LOGGER = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def validate_comment(
 @click.group()
 def main() -> None:
     """Cardonnay - Cardano local testnets."""
-    logging.basicConfig(format="%(message)s", level=logging.INFO)
+    color_logger.configure_logging()
 
 
 @main.command(help="Create a local testnet.")

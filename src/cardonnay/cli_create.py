@@ -5,6 +5,7 @@ import shutil
 
 import cardonnay_scripts
 from cardonnay import cli_utils
+from cardonnay import colors
 from cardonnay import helpers
 from cardonnay import local_scripts
 
@@ -90,7 +91,10 @@ def testnet_start(
         }
         helpers.print_json(instance_info)
     else:
-        print(f"Starting the testnet cluster with `{start_script}`:")
+        print(
+            f"{colors.BColors.OKGREEN}Starting the testnet cluster with "
+            f"`{start_script}`:{colors.BColors.ENDC}"
+        )
         try:
             helpers.run_command(command=str(start_script), workdir=workdir)
         except RuntimeError:
@@ -189,7 +193,10 @@ def cmd_create(  # noqa: PLR0911, C901
     LOGGER.debug(f"Testnet files generated to {destdir}")
 
     if generate_only:
-        print("🚀 You can now start the testnet cluster with:")
+        print(
+            f"🚀 {colors.BColors.OKGREEN}You can now start the testnet cluster "
+            f"with:{colors.BColors.ENDC}"
+        )
         print(f"source {workdir}/.source_cluster{instance_num}")
         print(f"{destdir}/start-cluster")
     else:
