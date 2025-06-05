@@ -7,6 +7,7 @@ import signal
 import time
 
 from cardonnay import cli_utils
+from cardonnay import colors
 from cardonnay import helpers
 
 LOGGER = logging.getLogger(__name__)
@@ -24,7 +25,10 @@ def testnet_stop(statedir: pl.Path, env: dict) -> int:
 
     cli_utils.set_env_vars(env=env)
 
-    print(f"Stopping the testnet cluster with `{stop_script}`:")
+    print(
+        f"{colors.BColors.OKGREEN}Stopping the testnet cluster with "
+        f"`{stop_script}`:{colors.BColors.ENDC}"
+    )
     try:
         helpers.run_command(str(stop_script), workdir=statedir)
     except RuntimeError:
@@ -59,7 +63,7 @@ def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
 
     cli_utils.set_env_vars(env=env)
 
-    print(f"Restarting testnet nodes with `{script}`:")
+    print(f"{colors.BColors.OKGREEN}Restarting testnet nodes with `{script}`:{colors.BColors.ENDC}")
     try:
         helpers.run_command(str(script), workdir=statedir)
     except RuntimeError:
@@ -82,7 +86,7 @@ def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
     cli_utils.set_env_vars(env=env)
 
     cmd = f"{script} restart all"
-    print(f"Restarting testnet with `{cmd}`:")
+    print(f"{colors.BColors.OKGREEN}Restarting testnet with `{cmd}`:{colors.BColors.ENDC}")
     try:
         helpers.run_command(cmd, workdir=statedir)
     except RuntimeError:

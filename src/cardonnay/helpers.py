@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import pathlib as pl
 import subprocess
 import sys
@@ -131,4 +132,14 @@ def wait_for_file(
 
         time.sleep(poll_interval)
 
+    return False
+
+
+def should_use_color() -> bool:
+    if "NO_COLOR" in os.environ:
+        return False
+    if os.environ.get("CLICOLOR_FORCE") == "1":
+        return True
+    if sys.stdout.isatty():
+        return os.environ.get("CLICOLOR", "1") != "0"
     return False
