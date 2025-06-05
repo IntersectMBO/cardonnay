@@ -123,10 +123,10 @@ def get_testnet_info(statedir: pl.Path) -> dict:
         testnet_info = {}
 
     testnet_name = testnet_info.get("name") or "unknown"
-    testnet_instance = int(statedir.name.replace("state-cluster", ""))
+    instance_num = int(statedir.name.replace("state-cluster", ""))
 
     instance_info = {
-        "instance": testnet_instance,
+        "instance": instance_num,
         "type": testnet_name,
         "state": testnet_state,
         "dir": str(statedir),
@@ -134,6 +134,20 @@ def get_testnet_info(statedir: pl.Path) -> dict:
     testnet_comment = testnet_info.get("comment")
     if testnet_comment:
         instance_info["comment"] = testnet_comment
+
+    workdir = statedir.parent
+
+    pidfile = workdir / f"start_cluster{instance_num}.pid"
+    if pidfile.exists() and testnet_state == consts.States.STARTING:
+        pid = 0
+        with contextlib.suppress(Exception):
+            pid = int(helpers.read_from_file(pidfile))
+        if pid:
+            instance_info["start_pid"] = pid
+
+    logfile = workdir / f"start_cluster{instance_num}.log"
+    if logfile.exists():
+        instance_info["start_logfile"] = str(logfile)
 
     return instance_info
 
