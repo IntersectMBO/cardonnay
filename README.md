@@ -89,3 +89,41 @@ submit_api: stopped
 webserver: stopped
 Cluster terminated!
 ```
+
+## 🛠️ Installation
+
+### Option 1: Using Nix
+
+If you use [Nix](https://nixos.org/), you can spin up a development shell with all dependencies:
+
+```sh
+nix develop
+```
+
+This will provide a fully set-up environment, including Python, Cardano binaries, and other tools.
+
+---
+
+### Option 2: Using `pip`
+
+Ensure the following dependencies are installed and available in your `PATH`:
+
+- `python3`
+- `make`
+- `jq`
+- `cardano-node`
+- `cardano-cli`
+
+Then install **Cardonnay** in a virtual environment:
+
+```sh
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install Cardonnay
+make install
+
+# (Optional) Enable shell completions for Bash
+source completions/cardonnay.bash-completion
+```
