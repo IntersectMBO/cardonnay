@@ -45,7 +45,7 @@ DELEG_MAGIC_VALUE=3340000000000000
 DELEG_SUPPLY="$((POOL_PLEDGE * NUM_POOLS + DELEG_MAGIC_VALUE))"
 NONDELEG_SUPPLY="$(( (MAX_SUPPLY - DELEG_SUPPLY) * 8 / 10))"
 
-if [ -f "${STATE_CLUSTER}/supervisord.pid" ]; then
+if [ -e "$SUPERVISORD_SOCKET_PATH" ]; then
   echo "Cluster already running. Please run \`${STATE_CLUSTER}/stop-cluster\` first!" >&2
   exit 1
 fi
@@ -709,4 +709,4 @@ if ! check_spend_success "${TXINS[@]}"; then
 fi
 
 : > "$START_CLUSTER_STATUS"
-echo "Cluster started"
+echo "Cluster started 🚀"
