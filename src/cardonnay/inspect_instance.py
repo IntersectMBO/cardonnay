@@ -5,6 +5,7 @@ import pathlib as pl
 import typing as tp
 
 from cardonnay import cli_utils
+from cardonnay import consts
 from cardonnay import helpers
 
 LOGGER = logging.getLogger(__name__)
@@ -107,9 +108,13 @@ def load_faucet_data(statedir: pl.Path) -> dict:
 def get_testnet_info(statedir: pl.Path) -> dict:
     """Get information about the testnet instance."""
     if (statedir / "supervisord.sock").exists():
-        testnet_state = "started" if (statedir / cli_utils.STATUS_STARTED).exists() else "starting"
+        testnet_state = (
+            consts.States.STARTED
+            if (statedir / cli_utils.STATUS_STARTED).exists()
+            else consts.States.STARTING
+        )
     else:
-        testnet_state = "stopped"
+        testnet_state = consts.States.STOPPED
 
     try:
         with open(statedir / cli_utils.TESTNET_JSON, encoding="utf-8") as fp_in:

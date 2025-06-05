@@ -8,6 +8,7 @@ import time
 
 from cardonnay import cli_utils
 from cardonnay import colors
+from cardonnay import consts
 from cardonnay import helpers
 
 LOGGER = logging.getLogger(__name__)
@@ -109,7 +110,11 @@ def print_instances(workdir: pl.Path) -> None:
         except Exception:
             testnet_info = {}
         testnet_name = testnet_info.get("name") or "unknown"
-        testnet_state = "started" if (statedir / cli_utils.STATUS_STARTED).exists() else "starting"
+        testnet_state = (
+            consts.States.STARTED
+            if (statedir / cli_utils.STATUS_STARTED).exists()
+            else consts.States.STARTING
+        )
         instance_info = {"instance": i, "type": testnet_name, "state": testnet_state}
         testnet_comment = testnet_info.get("comment")
         if testnet_comment:
