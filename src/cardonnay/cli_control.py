@@ -24,11 +24,11 @@ def testnet_stop(statedir: pl.Path, env: dict) -> int:
 
     cli_utils.set_env_vars(env=env)
 
-    LOGGER.info(f"Stopping testnet with `{stop_script}`.")
+    LOGGER.info(f"Stopping the testnet cluster with `{stop_script}`.")
     try:
         helpers.run_command(str(stop_script), workdir=statedir)
     except RuntimeError:
-        LOGGER.exception("Failed to stop testnet")
+        LOGGER.exception("Failed to stop the testnet cluster")
         return 1
 
     return 0

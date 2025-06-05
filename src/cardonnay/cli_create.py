@@ -90,11 +90,11 @@ def testnet_start(
         }
         helpers.print_json(instance_info)
     else:
-        LOGGER.info(f"Starting cluster with `{start_script}`.")
+        LOGGER.info(f"Starting the testnet cluster with `{start_script}`.")
         try:
             helpers.run_command(command=str(start_script), workdir=workdir)
         except RuntimeError:
-            LOGGER.exception("Failed to start testnet")
+            LOGGER.exception("Failed to start the testnet cluster")
             return 1
 
     return 0
@@ -189,7 +189,7 @@ def cmd_create(  # noqa: PLR0911, C901
     LOGGER.debug(f"Testnet files generated to {destdir}")
 
     if generate_only:
-        LOGGER.info("You can start the testnet with:")
+        LOGGER.info("You can start the testnet cluster with:")
         LOGGER.info(f"source {workdir}/.source_cluster{instance_num}")
         LOGGER.info(f"{destdir}/start-cluster")
     else:
