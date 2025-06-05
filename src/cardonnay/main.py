@@ -177,11 +177,18 @@ def control_print_env(instance_num: int, work_dir: str) -> None:
 
 
 for name, help_text in [
-    ("stop", "Stop the running testnet."),
+    ("stop", "Stop the running testnet instance."),
     ("restart", "Restart all processes of the testnet."),
-    ("restart_nodes", "Restart only nodes of the testnet."),
+    ("restart_nodes", "Restart only node processes of the testnet."),
 ]:
     make_actions_cmd(name, help_text)
+
+
+@control.command(name="stop-all", help="Stop all running testnet instances.")
+@common_options_dir
+def control_stopall(work_dir: str) -> None:
+    retval = cli_control.cmd_stopall(work_dir=work_dir)
+    exit_with(retval)
 
 
 @main.group(help="Inspect a testnet instance.")

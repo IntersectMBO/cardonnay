@@ -182,3 +182,14 @@ def cmd_actions(
         return 1
 
     return 0
+
+
+def cmd_stopall(work_dir: str) -> int:
+    """Stop all running testnet instances."""
+    workdir = cli_utils.get_workdir(workdir=work_dir).absolute()
+    for i in cli_utils.get_running_instances(workdir=workdir):
+        kill_starting_testnet(pidfile=workdir / f"start_cluster{i}.pid")
+        statedir = workdir / f"state-cluster{i}"
+        env = cli_utils.create_env_vars(workdir=workdir, instance_num=i)
+        testnet_stop(statedir=statedir, env=env)
+    return 0
