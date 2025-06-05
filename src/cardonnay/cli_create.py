@@ -6,6 +6,7 @@ import shutil
 import cardonnay_scripts
 from cardonnay import cli_utils
 from cardonnay import colors
+from cardonnay import consts
 from cardonnay import helpers
 from cardonnay import local_scripts
 
@@ -85,7 +86,7 @@ def testnet_start(
         instance_info = {
             "instance": instance_num,
             "type": testnet_variant,
-            "state": "starting",
+            "state": consts.States.STARTING,
             "pid": start_process.pid,
             "logfile": str(logfile),
         }
