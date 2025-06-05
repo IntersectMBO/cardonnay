@@ -50,7 +50,7 @@ def kill_starting_testnet(pidfile: pl.Path) -> None:
 
 
 def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
-    """Restart the testnet nodes by running the restart script."""
+    """Restart the testnet cluster nodes by running the restart script."""
     script = statedir / "supervisorctl_restart_nodes"
     if not script.exists():
         LOGGER.error(f"Restart nodes script '{script}' does not exist.")
@@ -58,11 +58,14 @@ def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
 
     cli_utils.set_env_vars(env=env)
 
-    print(f"{colors.BColors.OKGREEN}Restarting testnet nodes with `{script}`:{colors.BColors.ENDC}")
+    print(
+        f"{colors.BColors.OKGREEN}Restarting the testnet cluster nodes "
+        f"with `{script}`:{colors.BColors.ENDC}"
+    )
     try:
         helpers.run_command(str(script), workdir=statedir)
     except RuntimeError:
-        LOGGER.exception("Failed to restart testnet nodes")
+        LOGGER.exception("Failed to restart the testnet cluster nodes")
         return 1
 
     return 0
@@ -78,11 +81,13 @@ def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
     cli_utils.set_env_vars(env=env)
 
     cmd = f"{script} restart all"
-    print(f"{colors.BColors.OKGREEN}Restarting testnet with `{cmd}`:{colors.BColors.ENDC}")
+    print(
+        f"{colors.BColors.OKGREEN}Restarting the testnet cluster with `{cmd}`:{colors.BColors.ENDC}"
+    )
     try:
         helpers.run_command(cmd, workdir=statedir)
     except RuntimeError:
-        LOGGER.exception("Failed to restart testnet")
+        LOGGER.exception("Failed to restart the testnet cluster")
         return 1
 
     return 0
