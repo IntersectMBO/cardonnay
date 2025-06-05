@@ -24,7 +24,7 @@ def testnet_stop(statedir: pl.Path, env: dict) -> int:
 
     cli_utils.set_env_vars(env=env)
 
-    LOGGER.info(f"Stopping the testnet cluster with `{stop_script}`.")
+    print(f"Stopping the testnet cluster with `{stop_script}`:")
     try:
         helpers.run_command(str(stop_script), workdir=statedir)
     except RuntimeError:
@@ -59,7 +59,7 @@ def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
 
     cli_utils.set_env_vars(env=env)
 
-    LOGGER.info(f"Restarting testnet nodes with `{script}`.")
+    print(f"Restarting testnet nodes with `{script}`:")
     try:
         helpers.run_command(str(script), workdir=statedir)
     except RuntimeError:
@@ -82,7 +82,7 @@ def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
     cli_utils.set_env_vars(env=env)
 
     cmd = f"{script} restart all"
-    LOGGER.info(f"Restarting testnet with `{cmd}`.")
+    print(f"Restarting testnet with `{cmd}`:")
     try:
         helpers.run_command(cmd, workdir=statedir)
     except RuntimeError:
