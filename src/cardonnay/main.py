@@ -42,7 +42,7 @@ def common_options_instance(func: tp.Callable) -> tp.Callable:
                 type=click.IntRange(0, cli_utils.MAX_INSTANCES - 1),
                 required=True,
                 show_default=True,
-                help="Instance number in the sequence of testnet instances.",
+                help="Instance number.",
             ),
         ]
     ):
@@ -82,9 +82,11 @@ def main() -> None:
     "-b",
     "--background",
     is_flag=True,
-    help="Start the testnet script in background (default: false).",
+    help="Start the testnet cluster script in background (default: false).",
 )
-@click.option("-g", "--generate-only", is_flag=True, help="Don't run the testnet (default: false).")
+@click.option(
+    "-g", "--generate-only", is_flag=True, help="Don't run the testnet cluster (default: false)."
+)
 @click.option("-k", "--keep", is_flag=True, help="Don't delete destination directory if it exists.")
 @click.option(
     "-i",
@@ -143,7 +145,7 @@ def create(
     ctx.exit(retval)
 
 
-@main.group(help="Control existing testnets.")
+@main.group(help="Control existing testnet instances.")
 def control() -> None:
     """Control interface for Cardonnay instances."""
 
@@ -168,7 +170,7 @@ def control_ls(work_dir: str) -> None:
     exit_with(retval)
 
 
-@control.command(name="print-env", help="Print environment variables for the testnet.")
+@control.command(name="print-env", help="Print environment variables for the testnet instance.")
 @common_options_instance
 @common_options_dir
 def control_print_env(instance_num: int, work_dir: str) -> None:
@@ -177,9 +179,9 @@ def control_print_env(instance_num: int, work_dir: str) -> None:
 
 
 for name, help_text in [
-    ("stop", "Stop the running testnet instance."),
-    ("restart", "Restart all processes of the testnet."),
-    ("restart_nodes", "Restart only node processes of the testnet."),
+    ("stop", "Stop the running testnet cluster."),
+    ("restart", "Restart all processes of the testnet cluster."),
+    ("restart_nodes", "Restart only node processes of the testnet cluster."),
 ]:
     make_actions_cmd(name, help_text)
 
