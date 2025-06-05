@@ -44,11 +44,19 @@ def get_available_instances(workdir: pl.Path) -> tp.Generator[int, None, None]:
     return avail_instances
 
 
-def check_env_sanity() -> bool:
+def has_bins(bins: list[str]) -> bool:
     retval = True
-    bins = ["jq", "supervisord", "supervisorctl", "cardano-node", "cardano-cli"]
     for b in bins:
         if not shutil.which(b):
             LOGGER.error(f"Required binary '{b}' is not found in PATH.")
             retval = False
     return retval
+
+
+def check_env_sanity() -> bool:
+    bins = ["jq", "supervisord", "supervisorctl", "cardano-node", "cardano-cli"]
+    return has_bins(bins=bins)
+
+
+def has_supervisorctl() -> bool:
+    return has_bins(bins=["supervisorctl"])

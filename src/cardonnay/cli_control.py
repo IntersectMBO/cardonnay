@@ -16,9 +16,6 @@ LOGGER = logging.getLogger(__name__)
 
 def testnet_stop(statedir: pl.Path, env: dict) -> int:
     """Stop the testnet cluster by running the stop script."""
-    if not cli_utils.check_env_sanity():
-        return 1
-
     stop_script = statedir / "stop-cluster"
     if not stop_script.exists():
         LOGGER.error(f"Stop script '{stop_script}' does not exist.")
@@ -54,9 +51,6 @@ def kill_starting_testnet(pidfile: pl.Path) -> None:
 
 def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
     """Restart the testnet nodes by running the restart script."""
-    if not cli_utils.check_env_sanity():
-        return 1
-
     script = statedir / "supervisorctl_restart_nodes"
     if not script.exists():
         LOGGER.error(f"Restart nodes script '{script}' does not exist.")
@@ -76,9 +70,6 @@ def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
 
 def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
     """Restart the entire testnet cluster by running the supervisorctl command."""
-    if not cli_utils.check_env_sanity():
-        return 1
-
     script = statedir / "supervisorctl"
     if not script.exists():
         LOGGER.error(f"The supervisorctl script '{script}' does not exist.")
@@ -174,6 +165,9 @@ def cmd_actions(
 
     if instance_num not in cli_utils.get_running_instances(workdir=workdir_abs):
         LOGGER.error("Instance is not running.")
+        return 1
+
+    if not cli_utils.has_supervisorctl():
         return 1
 
     if stop:
