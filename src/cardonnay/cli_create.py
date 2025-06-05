@@ -69,9 +69,10 @@ def testnet_start(
 
     cli_utils.set_env_vars(env=env)
 
+    logfile = workdir / f"start_cluster{instance_num}.log"
+    logfile.unlink(missing_ok=True)
+
     if background:
-        logfile = workdir / f"start_cluster{instance_num}.log"
-        logfile.unlink(missing_ok=True)
         start_process = helpers.run_detached_command(
             command=str(start_script), logfile=logfile, workdir=workdir
         )
@@ -87,8 +88,9 @@ def testnet_start(
             "instance": instance_num,
             "type": testnet_variant,
             "state": consts.States.STARTING,
-            "pid": start_process.pid,
-            "logfile": str(logfile),
+            "dir": str(statedir),
+            "start_pid": start_process.pid,
+            "start_logfile": str(logfile),
         }
         helpers.print_json(instance_info)
     else:
