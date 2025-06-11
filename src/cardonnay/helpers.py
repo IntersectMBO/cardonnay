@@ -6,9 +6,23 @@ import subprocess
 import sys
 import time
 
+import pygments
+from pygments.formatters import terminal as pterminal
+from pygments.lexers import data as pdata
+
 from cardonnay import ttypes
 
 LOGGER = logging.getLogger(__name__)
+
+
+def should_use_color() -> bool:
+    if "NO_COLOR" in os.environ:
+        return False
+    if os.environ.get("CLICOLOR_FORCE") == "1":
+        return True
+    if sys.stdout.isatty():
+        return os.environ.get("CLICOLOR", "1") != "0"
+    return False
 
 
 def write_json(out_file: pl.Path, content: dict) -> pl.Path:
@@ -20,7 +34,15 @@ def write_json(out_file: pl.Path, content: dict) -> pl.Path:
 
 def print_json(data: dict | list) -> None:
     """Print JSON data to stdout in a pretty format."""
-    print(json.dumps(data, indent=2))
+    json_str = json.dumps(data, indent=2)
+    if should_use_color():
+        print(
+            pygments.highlight(
+                code=json_str, lexer=pdata.JsonLexer(), formatter=pterminal.TerminalFormatter()
+            )
+        )
+    else:
+        print(json_str)
 
 
 def run_command(
@@ -132,14 +154,4 @@ def wait_for_file(
 
         time.sleep(poll_interval)
 
-    return False
-
-
-def should_use_color() -> bool:
-    if "NO_COLOR" in os.environ:
-        return False
-    if os.environ.get("CLICOLOR_FORCE") == "1":
-        return True
-    if sys.stdout.isatty():
-        return os.environ.get("CLICOLOR", "1") != "0"
     return False
