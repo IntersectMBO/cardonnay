@@ -16,8 +16,9 @@ It supports multiple preconfigured testnet types and makes it easy to inspect an
 
 ### 1. List available testnet variants
 
-```sh
-$ cardonnay create -l
+`$ cardonnay create -l`
+
+```json
 [
   "conway_fast",
   "conway_slow",
@@ -30,28 +31,15 @@ $ cardonnay create -l
 ```sh
 $ cardonnay create -t conway_fast
 Starting the testnet cluster with `/var/tmp/cardonnay/cluster0_conway_fast/start-cluster`:
-generated genesis with: 3 genesis keys, 1 non-delegating UTxO key, 3 stake pools, 3 delegating UTxO keys, 3 delegation map entries,
-Generating Pool 1 Secrets
-Generating Pool 1 Metadata
-Generating Pool 2 Secrets
-Generating Pool 2 Metadata
-Generating Pool 3 Secrets
-Generating Pool 3 Metadata
-Waiting 5 seconds for the nodes to start
-Sleeping for initial Tx submission delay of 60 seconds
-Re-registering pools, creating CC members and DReps
-Estimated transaction fee: 707009 Lovelace
-Transaction successfully submitted. Transaction hash is:
-{"txhash":"0da263167de3998adc0590072fbf3a82fecf47618933cf9a4833c69005c7c18c"}
-Starting cardano-submit-api
-submit_api: started
+[...]
 Cluster started 🚀
 ```
 
 ### 3. List running testnet instances
 
-```sh
-$ cardonnay control ls
+`$ cardonnay control ls`
+
+```json
 [
   {
     "instance": 0,
@@ -63,8 +51,9 @@ $ cardonnay control ls
 
 ### 4. Inspect the testnet faucet
 
-```sh
-$ cardonnay inspect faucet -i 0
+`$ cardonnay inspect faucet -i 0`
+
+```json
 {
   "faucet": {
     "payment": {
@@ -81,12 +70,7 @@ $ cardonnay inspect faucet -i 0
 ```sh
 $ cardonnay control stop-all
 Stopping the testnet cluster with `/var/tmp/cardonnay/state-cluster0/stop-cluster`:
-nodes:bft1: stopped
-nodes:pool1: stopped
-nodes:pool2: stopped
-nodes:pool3: stopped
-submit_api: stopped
-webserver: stopped
+[...]
 Cluster terminated!
 ```
 
@@ -100,7 +84,13 @@ If you use [Nix](https://nixos.org/), you can spin up a development shell with a
 nix develop
 ```
 
-This will provide a fully set-up environment, including Python, Cardano binaries, and other tools.
+This will provide a fully set-up environment, including Python, Cardano binaries, and `jq`.
+
+> ℹ️ **NOTE:** To use the latest `master` branch of `cardano-node`, run
+
+  ```sh
+  nix develop --override-input cardano-node "github:input-output-hk/cardano-node/master" --recreate-lock-file
+  ```
 
 ---
 
