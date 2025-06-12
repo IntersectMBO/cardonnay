@@ -21,7 +21,7 @@ build:
 # upload package to PyPI
 .PHONY: upload
 upload:
-	if ! type twine >/dev/null 2>&1; then python3 -m pip install --require-virtualenv --upgrade twine; fi
+	if ! command -v twine >/dev/null 2>&1; then python3 -m pip install --require-virtualenv --upgrade twine; fi
 	twine upload --skip-existing dist/*
 
 # release package to PyPI
