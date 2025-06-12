@@ -5,10 +5,10 @@ import typing as tp
 
 import click
 
+from cardonnay import ca_utils
 from cardonnay import cli_control
 from cardonnay import cli_create
 from cardonnay import cli_inspect
-from cardonnay import cli_utils
 from cardonnay import color_logger
 
 LOGGER = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def common_options_instance(func: tp.Callable) -> tp.Callable:
             click.option(
                 "-i",
                 "--instance-num",
-                type=click.IntRange(0, cli_utils.MAX_INSTANCES - 1),
+                type=click.IntRange(0, ca_utils.MAX_INSTANCES - 1),
                 required=True,
                 show_default=True,
                 help="Instance number.",
@@ -92,7 +92,7 @@ def main() -> None:
     "-i",
     "--instance-num",
     default=-1,
-    type=click.IntRange(-1, cli_utils.MAX_INSTANCES - 1),
+    type=click.IntRange(-1, ca_utils.MAX_INSTANCES - 1),
     show_default=True,
     help="Instance number, auto-selected by default.",
 )

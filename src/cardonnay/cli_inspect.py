@@ -2,7 +2,7 @@ import logging
 import pathlib as pl
 import typing as tp
 
-from cardonnay import cli_utils
+from cardonnay import ca_utils
 from cardonnay import helpers
 from cardonnay import inspect_instance
 
@@ -14,7 +14,7 @@ def run_cmd_with_state(
     instance_num: int,
     data_fn: tp.Callable[[pl.Path], dict],
 ) -> int:
-    workdir = cli_utils.get_workdir(workdir=work_dir).absolute()
+    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
     statedir = workdir / f"state-cluster{instance_num}"
 
     if instance_num < 0:
