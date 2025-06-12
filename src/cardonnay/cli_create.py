@@ -4,7 +4,7 @@ import pathlib as pl
 import shutil
 
 import cardonnay_scripts
-from cardonnay import cli_utils
+from cardonnay import ca_utils
 from cardonnay import colors
 from cardonnay import consts
 from cardonnay import helpers
@@ -39,7 +39,7 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
         out_list = []
         for d in avail_scripts:
             try:
-                with open(scripts_base / d / cli_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
+                with open(scripts_base / d / ca_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
                     testnet_info = json.load(fp_in) or {}
             except Exception:
                 testnet_info = {"name": d}
@@ -59,7 +59,7 @@ def testnet_start(
     background: bool,
 ) -> int:
     """Start the testnet cluster using the start script."""
-    if not cli_utils.check_env_sanity():
+    if not ca_utils.check_env_sanity():
         return 1
 
     start_script = testnetdir / "start-cluster"
@@ -67,7 +67,7 @@ def testnet_start(
         LOGGER.error(f"Start script '{start_script}' does not exist.")
         return 1
 
-    cli_utils.set_env_vars(env=env)
+    ca_utils.set_env_vars(env=env)
 
     logfile = workdir / f"start_cluster{instance_num}.log"
     logfile.unlink(missing_ok=True)
@@ -109,7 +109,7 @@ def testnet_start(
 
 def add_comment(destdir: pl.Path, comment: str) -> None:
     """Add a comment to the testnet info file in the destination directory."""
-    testnet_file = destdir / cli_utils.TESTNET_JSON
+    testnet_file = destdir / ca_utils.TESTNET_JSON
     try:
         with open(testnet_file, encoding="utf-8") as fp_in:
             testnet_info: dict = json.load(fp_in) or {}
@@ -144,16 +144,16 @@ def cmd_create(  # noqa: PLR0911, C901
         LOGGER.error(f"Testnet variant '{testnet_variant}' does not exist in '{scripts_base}'.")
         return 1
 
-    if instance_num > cli_utils.MAX_INSTANCES:
+    if instance_num > ca_utils.MAX_INSTANCES:
         LOGGER.error(
-            f"Instance number {instance_num} exceeds maximum allowed {cli_utils.MAX_INSTANCES}."
+            f"Instance number {instance_num} exceeds maximum allowed {ca_utils.MAX_INSTANCES}."
         )
         return 1
 
-    workdir = cli_utils.get_workdir(workdir=work_dir)
+    workdir = ca_utils.get_workdir(workdir=work_dir)
     workdir_abs = workdir.absolute()
 
-    avail_instances_gen = cli_utils.get_available_instances(workdir=workdir_abs)
+    avail_instances_gen = ca_utils.get_available_instances(workdir=workdir_abs)
     if instance_num < 0:
         try:
             instance_num = next(avail_instances_gen)
@@ -190,7 +190,7 @@ def cmd_create(  # noqa: PLR0911, C901
     if comment:
         add_comment(destdir=destdir_abs, comment=comment)
 
-    env = cli_utils.create_env_vars(workdir=workdir_abs, instance_num=instance_num)
+    env = ca_utils.create_env_vars(workdir=workdir_abs, instance_num=instance_num)
     write_env_vars(env=env, workdir=workdir_abs, instance_num=instance_num)
 
     LOGGER.debug(f"Testnet files generated to {destdir}")

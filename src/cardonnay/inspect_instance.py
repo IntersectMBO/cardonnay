@@ -4,7 +4,7 @@ import logging
 import pathlib as pl
 import typing as tp
 
-from cardonnay import cli_utils
+from cardonnay import ca_utils
 from cardonnay import consts
 from cardonnay import helpers
 
@@ -34,7 +34,7 @@ def get_process_environ(pid: int) -> dict:
 def get_control_var_names(statedir: pl.Path) -> list[str]:
     """Get names of control environment variables from the testnet info file."""
     try:
-        with open(statedir / cli_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
+        with open(statedir / ca_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
             testnet_info = json.load(fp_in) or {}
     except Exception:
         testnet_info = {}
@@ -110,14 +110,14 @@ def get_testnet_info(statedir: pl.Path) -> dict:
     if (statedir / "supervisord.sock").exists():
         testnet_state = (
             consts.States.STARTED
-            if (statedir / cli_utils.STATUS_STARTED).exists()
+            if (statedir / ca_utils.STATUS_STARTED).exists()
             else consts.States.STARTING
         )
     else:
         testnet_state = consts.States.STOPPED
 
     try:
-        with open(statedir / cli_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
+        with open(statedir / ca_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
             testnet_info = json.load(fp_in) or {}
     except Exception:
         testnet_info = {}
