@@ -52,31 +52,31 @@ def load_pools_data(statedir: pl.Path) -> dict:
         pools_data[pool_data_dir.name] = {
             "payment": {
                 "address": helpers.read_from_file(pool_data_dir / "owner.addr"),
-                "vkey_file": str(pool_data_dir / "owner-utxo.vkey"),
-                "skey_file": str(pool_data_dir / "owner-utxo.skey"),
+                "vkey_file": pool_data_dir / "owner-utxo.vkey",
+                "skey_file": pool_data_dir / "owner-utxo.skey",
             },
             "stake": {
                 "address": helpers.read_from_file(pool_data_dir / "owner-stake.addr"),
-                "vkey_file": str(pool_data_dir / "owner-stake.vkey"),
-                "skey_file": str(pool_data_dir / "owner-stake.skey"),
+                "vkey_file": pool_data_dir / "owner-stake.vkey",
+                "skey_file": pool_data_dir / "owner-stake.skey",
             },
-            "stake_addr_registration_cert": str(pool_data_dir / "stake.reg.cert"),
-            "stake_addr_delegation_cert": str(pool_data_dir / "owner-stake.deleg.cert"),
-            "reward_addr_registration_cert": str(pool_data_dir / "stake-reward.reg.cert"),
-            "pool_registration_cert": str(pool_data_dir / "register.cert"),
-            "pool_operational_cert": str(pool_data_dir / "op.cert"),
+            "stake_addr_registration_cert": pool_data_dir / "stake.reg.cert",
+            "stake_addr_delegation_cert": pool_data_dir / "owner-stake.deleg.cert",
+            "reward_addr_registration_cert": pool_data_dir / "stake-reward.reg.cert",
+            "pool_registration_cert": pool_data_dir / "register.cert",
+            "pool_operational_cert": pool_data_dir / "op.cert",
             "cold_key_pair": {
-                "vkey_file": str(pool_data_dir / "cold.vkey"),
-                "skey_file": str(pool_data_dir / "cold.skey"),
-                "counter_file": str(pool_data_dir / "cold.counter"),
+                "vkey_file": pool_data_dir / "cold.vkey",
+                "skey_file": pool_data_dir / "cold.skey",
+                "counter_file": pool_data_dir / "cold.counter",
             },
             "vrf_key_pair": {
-                "vkey_file": str(pool_data_dir / "vrf.vkey"),
-                "skey_file": str(pool_data_dir / "vrf.skey"),
+                "vkey_file": pool_data_dir / "vrf.vkey",
+                "skey_file": pool_data_dir / "vrf.skey",
             },
             "kes_key_pair": {
-                "vkey_file": str(pool_data_dir / "kes.vkey"),
-                "skey_file": str(pool_data_dir / "kes.skey"),
+                "vkey_file": pool_data_dir / "kes.vkey",
+                "skey_file": pool_data_dir / "kes.skey",
             },
         }
 
@@ -92,14 +92,14 @@ def load_faucet_data(statedir: pl.Path) -> dict:
     if (byron_dir / "address-000-converted").exists():
         faucet_addrs_data["faucet"]["payment"] = {
             "address": helpers.read_from_file(byron_dir / "address-000-converted"),
-            "vkey_file": str(byron_dir / "payment-keys.000-converted.vkey"),
-            "skey_file": str(byron_dir / "payment-keys.000-converted.skey"),
+            "vkey_file": byron_dir / "payment-keys.000-converted.vkey",
+            "skey_file": byron_dir / "payment-keys.000-converted.skey",
         }
     elif (shelley_dir / "genesis-utxo.addr").exists():
         faucet_addrs_data["faucet"]["payment"] = {
             "address": helpers.read_from_file(shelley_dir / "genesis-utxo.addr"),
-            "vkey_file": str(shelley_dir / "genesis-utxo.vkey"),
-            "skey_file": str(shelley_dir / "genesis-utxo.skey"),
+            "vkey_file": shelley_dir / "genesis-utxo.vkey",
+            "skey_file": shelley_dir / "genesis-utxo.skey",
         }
 
     return faucet_addrs_data
@@ -129,7 +129,7 @@ def get_testnet_info(statedir: pl.Path) -> dict:
         "instance": instance_num,
         "type": testnet_name,
         "state": testnet_state,
-        "dir": str(statedir),
+        "dir": statedir,
     }
     testnet_comment = testnet_info.get("comment")
     if testnet_comment:
@@ -147,7 +147,7 @@ def get_testnet_info(statedir: pl.Path) -> dict:
 
     logfile = workdir / f"start_cluster{instance_num}.log"
     if logfile.exists():
-        instance_info["start_logfile"] = str(logfile)
+        instance_info["start_logfile"] = logfile
 
     return instance_info
 

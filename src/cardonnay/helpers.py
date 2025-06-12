@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 import logging
 import os
@@ -5,6 +6,7 @@ import pathlib as pl
 import subprocess
 import sys
 import time
+import typing as tp
 
 import pygments
 from pygments.formatters import terminal as pterminal
@@ -13,6 +15,16 @@ from pygments.lexers import data as pdata
 from cardonnay import ttypes
 
 LOGGER = logging.getLogger(__name__)
+
+
+class CustomEncoder(json.JSONEncoder):
+    # pyrefly: ignore  # bad-override
+    def default(self, obj: tp.Any) -> tp.Any:  # noqa: ANN401
+        if isinstance(obj, pl.Path):
+            return str(obj)
+        if isinstance(obj, dt.datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 def should_use_color() -> bool:
@@ -34,7 +46,7 @@ def write_json(out_file: pl.Path, content: dict) -> pl.Path:
 
 def print_json(data: dict | list) -> None:
     """Print JSON data to stdout in a pretty format."""
-    json_str = json.dumps(data, indent=2)
+    json_str = json.dumps(data, cls=CustomEncoder, indent=2)
     if should_use_color():
         print(
             pygments.highlight(
