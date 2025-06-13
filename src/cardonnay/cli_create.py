@@ -6,8 +6,8 @@ import shutil
 import cardonnay_scripts
 from cardonnay import ca_utils
 from cardonnay import colors
-from cardonnay import consts
 from cardonnay import helpers
+from cardonnay import inspect_instance
 from cardonnay import local_scripts
 
 LOGGER = logging.getLogger(__name__)
@@ -53,7 +53,6 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
 def testnet_start(
     testnetdir: pl.Path,
     workdir: pl.Path,
-    testnet_variant: str,
     env: dict,
     instance_num: int,
     background: bool,
@@ -84,15 +83,7 @@ def testnet_start(
         pidfile.unlink(missing_ok=True)
         pidfile.write_text(str(start_process.pid))
 
-        instance_info = {
-            "instance": instance_num,
-            "type": testnet_variant,
-            "state": consts.States.STARTING,
-            "dir": str(statedir),
-            "start_pid": start_process.pid,
-            "start_logfile": str(logfile),
-        }
-        helpers.print_json(instance_info)
+        helpers.print_json(inspect_instance.get_testnet_info(statedir=statedir))
     else:
         print(
             f"{colors.BColors.OKGREEN}Starting the testnet cluster with "
@@ -214,7 +205,6 @@ def cmd_create(  # noqa: PLR0911, C901
         run_retval = testnet_start(
             testnetdir=destdir_abs,
             workdir=workdir_abs,
-            testnet_variant=testnet_variant,
             env=env,
             instance_num=instance_num,
             background=background,

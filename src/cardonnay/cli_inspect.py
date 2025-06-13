@@ -1,6 +1,5 @@
 import logging
 import pathlib as pl
-import typing as tp
 
 from cardonnay import ca_utils
 from cardonnay import helpers
@@ -9,14 +8,10 @@ from cardonnay import inspect_instance
 LOGGER = logging.getLogger(__name__)
 
 
-def run_cmd_with_state(
-    work_dir: str,
+def check_prereq(
+    statedir: pl.Path,
     instance_num: int,
-    data_fn: tp.Callable[[pl.Path], dict],
 ) -> int:
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
-    statedir = workdir / f"state-cluster{instance_num}"
-
     if instance_num < 0:
         LOGGER.error("Valid instance number is required.")
         return 1
@@ -25,40 +20,51 @@ def run_cmd_with_state(
         LOGGER.error("State dir for the instance doesn't exist.")
         return 1
 
-    helpers.print_json(data=data_fn(statedir))
     return 0
 
 
 def cmd_faucet(work_dir: str, instance_num: int) -> int:
-    return run_cmd_with_state(
-        work_dir=work_dir,
-        instance_num=instance_num,
-        data_fn=inspect_instance.load_faucet_data,
-    )
+    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
+    statedir = workdir / f"state-cluster{instance_num}"
+
+    if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
+        return ret
+
+    helpers.print_json(data=inspect_instance.load_faucet_data(statedir=statedir))
+    return 0
 
 
 def cmd_pools(work_dir: str, instance_num: int) -> int:
-    return run_cmd_with_state(
-        work_dir=work_dir,
-        instance_num=instance_num,
-        data_fn=inspect_instance.load_pools_data,
-    )
+    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
+    statedir = workdir / f"state-cluster{instance_num}"
+
+    if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
+        return ret
+
+    pools_data = [
+        d.model_dump(mode="json") for d in inspect_instance.load_pools_data(statedir=statedir)
+    ]
+    helpers.print_json(data=pools_data)
+    return 0
 
 
 def cmd_status(work_dir: str, instance_num: int) -> int:
-    return run_cmd_with_state(
-        work_dir=work_dir,
-        instance_num=instance_num,
-        data_fn=lambda s: {
-            **inspect_instance.get_testnet_info(statedir=s),
-            **inspect_instance.get_control_env(statedir=s),
-        },
-    )
+    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
+    statedir = workdir / f"state-cluster{instance_num}"
+
+    if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
+        return ret
+
+    helpers.print_json(data=inspect_instance.get_testnet_info(statedir=statedir))
+    return 0
 
 
 def cmd_config(work_dir: str, instance_num: int) -> int:
-    return run_cmd_with_state(
-        work_dir=work_dir,
-        instance_num=instance_num,
-        data_fn=inspect_instance.get_config,
-    )
+    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
+    statedir = workdir / f"state-cluster{instance_num}"
+
+    if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
+        return ret
+
+    helpers.print_json(data=inspect_instance.get_config(statedir=statedir))
+    return 0
