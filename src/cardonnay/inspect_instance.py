@@ -130,7 +130,7 @@ def get_supervisor_env(statedir: pl.Path) -> structs.SupervisorData:
         contextlib.suppress(Exception),
         open(statedir / "supervisor.conf", encoding="utf-8") as fp_in,
     ):
-        supervisor_conf = set(fp_in.readlines())
+        supervisor_conf = {line.rstrip("\r\n") for line in fp_in}
 
     supervisor_data = structs.SupervisorData(
         HAS_DBSYNC="[program:dbsync]" in supervisor_conf,
