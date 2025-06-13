@@ -150,6 +150,14 @@ def cmd_create(  # noqa: PLR0911, C901
         )
         return 1
 
+    if work_dir and (
+        run_inst_default := ca_utils.get_running_instances(workdir=ca_utils.get_workdir(workdir=""))
+    ):
+        run_insts_str = ",".join(sorted(str(i) for i in run_inst_default))
+        LOGGER.error(f"Instances running in the default workdir '{work_dir}': {run_insts_str}")
+        LOGGER.error("Stop them first before using custom work dir.")
+        return 1
+
     workdir = ca_utils.get_workdir(workdir=work_dir)
     workdir_abs = workdir.absolute()
 
