@@ -184,7 +184,7 @@ def get_testnet_info(statedir: pl.Path) -> structs.InstanceInfo:
         state=testnet_state,
         dir=statedir,
         comment=testnet_info.get("comment"),
-        start_pid=start_pid,
+        start_pid=start_pid if start_pid > 0 else None,
         start_logfile=start_logfile,
         control_env=get_control_env(statedir=statedir),
         supervisor_env=get_supervisor_env(statedir=statedir),
