@@ -8,6 +8,7 @@ import sys
 import time
 import typing as tp
 
+import pydantic
 import pygments
 from pygments.formatters import terminal as pterminal
 from pygments.lexers import data as pdata
@@ -44,17 +45,25 @@ def write_json(out_file: pl.Path, content: dict) -> pl.Path:
     return out_file
 
 
-def print_json(data: dict | list) -> None:
-    """Print JSON data to stdout in a pretty format."""
-    json_str = json.dumps(data, cls=CustomEncoder, indent=2)
+def print_json_str(data: str) -> None:
+    """Print JSON string to stdout in a pretty format."""
     if should_use_color():
         print(
             pygments.highlight(
-                code=json_str, lexer=pdata.JsonLexer(), formatter=pterminal.TerminalFormatter()
+                code=data, lexer=pdata.JsonLexer(), formatter=pterminal.TerminalFormatter()
             )
         )
     else:
-        print(json_str)
+        print(data)
+
+
+def print_json(data: dict | list | pydantic.BaseModel) -> None:
+    """Print JSON data to stdout in a pretty format."""
+    if isinstance(data, pydantic.BaseModel):
+        json_str = data.model_dump_json(indent=2)
+    else:
+        json_str = json.dumps(data, cls=CustomEncoder, indent=2)
+    print_json_str(data=json_str)
 
 
 def run_command(

@@ -10,6 +10,7 @@ from cardonnay import ca_utils
 from cardonnay import colors
 from cardonnay import consts
 from cardonnay import helpers
+from cardonnay import structs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -96,27 +97,36 @@ def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
 def print_instances(workdir: pl.Path) -> None:
     """Print the list of running testnet instances."""
     running_instances = sorted(ca_utils.get_running_instances(workdir=workdir))
+    out_list: list[structs.InstanceSummary] = []
 
-    out_list = []
     for i in running_instances:
         statedir = workdir / f"state-cluster{i}"
-        try:
-            with open(statedir / ca_utils.TESTNET_JSON, encoding="utf-8") as fp_in:
-                testnet_info = json.load(fp_in) or {}
-        except Exception:
-            testnet_info = {}
+
+        with (
+            contextlib.suppress(Exception),
+            open(statedir / ca_utils.TESTNET_JSON, encoding="utf-8") as fp_in,
+        ):
+            testnet_info = json.load(fp_in) or {}
+
+        testnet_info = testnet_info if "testnet_info" in locals() else {}
         testnet_name = testnet_info.get("name") or "unknown"
+
         testnet_state = (
             consts.States.STARTED
             if (statedir / ca_utils.STATUS_STARTED).exists()
             else consts.States.STARTING
         )
-        instance_info = {"instance": i, "type": testnet_name, "state": testnet_state}
-        testnet_comment = testnet_info.get("comment")
-        if testnet_comment:
-            instance_info["comment"] = testnet_comment
-        out_list.append(instance_info)
-    helpers.print_json(data=out_list)
+
+        out_list.append(
+            structs.InstanceSummary(
+                instance=i,
+                type=testnet_name,
+                state=testnet_state,
+                comment=testnet_info.get("comment"),
+            )
+        )
+
+    helpers.print_json(data=[item.model_dump(mode="json") for item in out_list])
 
 
 def print_env_sh(env: dict[str, str]) -> None:
