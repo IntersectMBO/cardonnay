@@ -1,11 +1,6 @@
 .PHONY: install
 install:
 	python3 -m pip install --require-virtualenv --upgrade pip
-	python3 -m pip install --require-virtualenv --upgrade -e . $(PIP_INSTALL_ARGS)
-
-.PHONY: install_dev
-install_dev:
-	python3 -m pip install --require-virtualenv --upgrade pip
 	python3 -m pip install --require-virtualenv --upgrade -r requirements-dev.txt $(PIP_INSTALL_ARGS)
 
 # run linters
