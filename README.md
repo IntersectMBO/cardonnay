@@ -98,7 +98,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install Cardonnay
-pip install cardonnay
+pip install -U --require-virtualenv cardonnay
 
 # (Optional) Enable shell completions for Bash
 source completions/cardonnay.bash-completion
