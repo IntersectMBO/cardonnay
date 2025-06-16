@@ -2,6 +2,7 @@ import contextlib
 import json
 import logging
 import pathlib as pl
+import re
 
 from cardonnay import ca_utils
 from cardonnay import consts
@@ -122,6 +123,17 @@ def get_control_env(statedir: pl.Path) -> dict:
     return environ_data
 
 
+def get_submit_api_port(statedir: pl.Path) -> int:
+    """Get the port number for the Submit API from the `run-cardano-submit-api` file."""
+    content = ""
+    with contextlib.suppress(Exception):
+        content = helpers.read_from_file(statedir / "run-cardano-submit-api")
+
+    if port_match := re.search(r"--port\s+(\d+)", content):
+        return int(port_match.group(1))
+    return -1
+
+
 def get_supervisor_env(statedir: pl.Path) -> structs.SupervisorData:
     """Get supervisor environment data from the statedir."""
     supervisor_conf = set()
@@ -184,6 +196,7 @@ def get_testnet_info(statedir: pl.Path) -> structs.InstanceInfo:
         state=testnet_state,
         dir=statedir,
         comment=testnet_info.get("comment"),
+        submit_api_port=sp if (sp := get_submit_api_port(statedir=statedir)) > 0 else None,
         start_pid=start_pid if start_pid > 0 else None,
         start_logfile=start_logfile,
         control_env=get_control_env(statedir=statedir),
