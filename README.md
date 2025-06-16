@@ -88,6 +88,7 @@ Ensure the following dependencies are installed and available in your `PATH`:
 - `jq`
 - `cardano-node`
 - `cardano-cli`
+- optional: `cardano-submit-api`
 
 Then install **Cardonnay** in a virtual environment:
 
