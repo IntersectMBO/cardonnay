@@ -23,9 +23,9 @@ def check_prereq(
     return 0
 
 
-def cmd_faucet(work_dir: str, instance_num: int) -> int:
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
-    statedir = workdir / f"state-cluster{instance_num}"
+def cmd_faucet(workdir: str, instance_num: int) -> int:
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
+    statedir = workdir_pl / f"state-cluster{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret
@@ -34,9 +34,9 @@ def cmd_faucet(work_dir: str, instance_num: int) -> int:
     return 0
 
 
-def cmd_pools(work_dir: str, instance_num: int) -> int:
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
-    statedir = workdir / f"state-cluster{instance_num}"
+def cmd_pools(workdir: str, instance_num: int) -> int:
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
+    statedir = workdir_pl / f"state-cluster{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret
@@ -48,9 +48,9 @@ def cmd_pools(work_dir: str, instance_num: int) -> int:
     return 0
 
 
-def cmd_status(work_dir: str, instance_num: int) -> int:
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
-    statedir = workdir / f"state-cluster{instance_num}"
+def cmd_status(workdir: str, instance_num: int) -> int:
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
+    statedir = workdir_pl / f"state-cluster{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret
@@ -59,9 +59,9 @@ def cmd_status(work_dir: str, instance_num: int) -> int:
     return 0
 
 
-def cmd_config(work_dir: str, instance_num: int) -> int:
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
-    statedir = workdir / f"state-cluster{instance_num}"
+def cmd_config(workdir: str, instance_num: int) -> int:
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
+    statedir = workdir_pl / f"state-cluster{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret

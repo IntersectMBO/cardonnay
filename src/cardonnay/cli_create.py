@@ -120,7 +120,7 @@ def cmd_create(  # noqa: PLR0911, C901
     keep: bool,
     stake_pools_num: int,
     ports_base: int,
-    work_dir: str,
+    workdir: str,
     instance_num: int,
     verbose: int,
 ) -> int:
@@ -141,16 +141,16 @@ def cmd_create(  # noqa: PLR0911, C901
         )
         return 1
 
-    if work_dir and (
+    if workdir and (
         run_inst_default := ca_utils.get_running_instances(workdir=ca_utils.get_workdir(workdir=""))
     ):
         run_insts_str = ",".join(sorted(str(i) for i in run_inst_default))
-        LOGGER.error(f"Instances running in the default workdir '{work_dir}': {run_insts_str}")
+        LOGGER.error(f"Instances running in the default workdir '{workdir}': {run_insts_str}")
         LOGGER.error("Stop them first before using custom work dir.")
         return 1
 
-    workdir = ca_utils.get_workdir(workdir=work_dir)
-    workdir_abs = workdir.absolute()
+    workdir_pl = ca_utils.get_workdir(workdir=workdir)
+    workdir_abs = workdir_pl.absolute()
 
     avail_instances_gen = ca_utils.get_available_instances(workdir=workdir_abs)
     if instance_num < 0:
@@ -162,7 +162,7 @@ def cmd_create(  # noqa: PLR0911, C901
     elif instance_num not in avail_instances_gen:
         LOGGER.error(f"Instance number {instance_num} is already in use.")
         return 1
-    destdir = workdir / f"cluster{instance_num}_{testnet_variant}"
+    destdir = workdir_pl / f"cluster{instance_num}_{testnet_variant}"
     destdir_abs = destdir.absolute()
 
     if not keep:
@@ -199,7 +199,7 @@ def cmd_create(  # noqa: PLR0911, C901
             f"🚀 {colors.BColors.OKGREEN}You can now start the testnet cluster "
             f"with:{colors.BColors.ENDC}"
         )
-        print(f"source {workdir}/.source_cluster{instance_num}")
+        print(f"source {workdir_pl}/.source_cluster{instance_num}")
         print(f"{destdir}/start-cluster")
     else:
         run_retval = testnet_start(

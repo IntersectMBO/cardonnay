@@ -25,7 +25,7 @@ def set_env_vars(env: dict[str, str]) -> None:
 
 def get_workdir(workdir: ttypes.FileType) -> pl.Path:
     if workdir != "":
-        return pl.Path(workdir)
+        return pl.Path(workdir).expanduser()
 
     return pl.Path("/var/tmp/cardonnay")
 

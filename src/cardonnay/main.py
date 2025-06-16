@@ -138,7 +138,7 @@ def create(
         keep=keep,
         stake_pools_num=stake_pools_num,
         ports_base=ports_base,
-        work_dir=work_dir,
+        workdir=work_dir,
         instance_num=instance_num,
         verbose=verbose,
     )
@@ -157,7 +157,7 @@ def make_actions_cmd(flag_name: str, help_text: str) -> None:
     def cmd(instance_num: int, work_dir: str) -> None:
         retval = cli_control.cmd_actions(
             **{flag_name: True},
-            work_dir=work_dir,
+            workdir=work_dir,
             instance_num=instance_num,
         )
         exit_with(retval)
@@ -166,7 +166,7 @@ def make_actions_cmd(flag_name: str, help_text: str) -> None:
 @control.command(name="ls", help="List running testnet instances.")
 @common_options_dir
 def control_ls(work_dir: str) -> None:
-    retval = cli_control.cmd_ls(work_dir=work_dir)
+    retval = cli_control.cmd_ls(workdir=work_dir)
     exit_with(retval)
 
 
@@ -174,7 +174,7 @@ def control_ls(work_dir: str) -> None:
 @common_options_instance
 @common_options_dir
 def control_print_env(instance_num: int, work_dir: str) -> None:
-    retval = cli_control.cmd_print_env(work_dir=work_dir, instance_num=instance_num)
+    retval = cli_control.cmd_print_env(workdir=work_dir, instance_num=instance_num)
     exit_with(retval)
 
 
@@ -189,7 +189,7 @@ for name, help_text in [
 @control.command(name="stop-all", help="Stop all running testnet instances.")
 @common_options_dir
 def control_stopall(work_dir: str) -> None:
-    retval = cli_control.cmd_stopall(work_dir=work_dir)
+    retval = cli_control.cmd_stopall(workdir=work_dir)
     exit_with(retval)
 
 
@@ -203,7 +203,7 @@ def inspect() -> None:
 @common_options_dir
 def inspect_faucet(instance_num: int, work_dir: str) -> None:
     retval = cli_inspect.cmd_faucet(
-        work_dir=work_dir,
+        workdir=work_dir,
         instance_num=instance_num,
     )
     exit_with(retval)
@@ -214,7 +214,7 @@ def inspect_faucet(instance_num: int, work_dir: str) -> None:
 @common_options_dir
 def inspect_pools(instance_num: int, work_dir: str) -> None:
     retval = cli_inspect.cmd_pools(
-        work_dir=work_dir,
+        workdir=work_dir,
         instance_num=instance_num,
     )
     exit_with(retval)
@@ -225,7 +225,7 @@ def inspect_pools(instance_num: int, work_dir: str) -> None:
 @common_options_dir
 def inspect_status(instance_num: int, work_dir: str) -> None:
     retval = cli_inspect.cmd_status(
-        work_dir=work_dir,
+        workdir=work_dir,
         instance_num=instance_num,
     )
     exit_with(retval)
@@ -236,7 +236,7 @@ def inspect_status(instance_num: int, work_dir: str) -> None:
 @common_options_dir
 def inspect_config(instance_num: int, work_dir: str) -> None:
     retval = cli_inspect.cmd_config(
-        work_dir=work_dir,
+        workdir=work_dir,
         instance_num=instance_num,
     )
     exit_with(retval)

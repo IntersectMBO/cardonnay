@@ -40,7 +40,7 @@ def should_use_color() -> bool:
 
 def write_json(out_file: pl.Path, content: dict) -> pl.Path:
     """Write dictionary content to JSON file."""
-    with open(out_file.expanduser(), "w", encoding="utf-8") as out_fp:
+    with open(out_file, "w", encoding="utf-8") as out_fp:
         out_fp.write(json.dumps(content, indent=4))
     return out_file
 
@@ -144,7 +144,7 @@ def run_detached_command(
 
 def read_from_file(file: ttypes.FileType) -> str:
     """Read address stored in file."""
-    with open(pl.Path(file).expanduser(), encoding="utf-8") as in_file:
+    with open(pl.Path(file), encoding="utf-8") as in_file:
         return in_file.read().strip()
 
 
