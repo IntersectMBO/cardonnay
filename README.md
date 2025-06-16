@@ -85,7 +85,6 @@ This will provide a fully set-up environment, including Python, Cardano binaries
 Ensure the following dependencies are installed and available in your `PATH`:
 
 - `python3`
-- `make`
 - `jq`
 - `cardano-node`
 - `cardano-cli`
