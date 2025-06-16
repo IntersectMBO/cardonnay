@@ -136,49 +136,48 @@ def print_env_sh(env: dict[str, str]) -> None:
 
 
 def cmd_print_env(
-    work_dir: str,
+    workdir: str,
     instance_num: int,
 ) -> int:
     """Print environment variables for the specified testnet instance."""
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
 
     if instance_num < 0:
         LOGGER.error("Valid instance number is required.")
         return 1
 
-    env = ca_utils.create_env_vars(workdir=workdir, instance_num=instance_num)
+    env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=instance_num)
 
     print_env_sh(env=env)
 
     return 0
 
 
-def cmd_ls(work_dir: str) -> int:
+def cmd_ls(workdir: str) -> int:
     """List all running testnet instances."""
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
-    print_instances(workdir=workdir)
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
+    print_instances(workdir=workdir_pl)
     return 0
 
 
 def cmd_actions(
-    work_dir: str,
+    workdir: str,
     instance_num: int,
     stop: bool = False,
     restart: bool = False,
     restart_nodes: bool = False,
 ) -> int:
     """Perform actions on a testnet instance."""
-    workdir = ca_utils.get_workdir(workdir=work_dir)
-    workdir_abs = workdir.absolute()
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
 
     if instance_num < 0:
         LOGGER.error("Valid instance number is required.")
         return 1
 
-    statedir = workdir_abs / f"state-cluster{instance_num}"
-    env = ca_utils.create_env_vars(workdir=workdir_abs, instance_num=instance_num)
+    statedir = workdir_pl / f"state-cluster{instance_num}"
+    env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=instance_num)
 
-    if instance_num not in ca_utils.get_running_instances(workdir=workdir_abs):
+    if instance_num not in ca_utils.get_running_instances(workdir=workdir_pl):
         LOGGER.error("Instance is not running.")
         return 1
 
@@ -186,7 +185,7 @@ def cmd_actions(
         return 1
 
     if stop:
-        kill_starting_testnet(pidfile=workdir_abs / f"start_cluster{instance_num}.pid")
+        kill_starting_testnet(pidfile=workdir_pl / f"start_cluster{instance_num}.pid")
         testnet_stop(statedir=statedir, env=env)
     elif restart:
         testnet_restart_all(statedir=statedir, env=env)
@@ -199,12 +198,12 @@ def cmd_actions(
     return 0
 
 
-def cmd_stopall(work_dir: str) -> int:
+def cmd_stopall(workdir: str) -> int:
     """Stop all running testnet instances."""
-    workdir = ca_utils.get_workdir(workdir=work_dir).absolute()
-    for i in ca_utils.get_running_instances(workdir=workdir):
-        kill_starting_testnet(pidfile=workdir / f"start_cluster{i}.pid")
-        statedir = workdir / f"state-cluster{i}"
-        env = ca_utils.create_env_vars(workdir=workdir, instance_num=i)
+    workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
+    for i in ca_utils.get_running_instances(workdir=workdir_pl):
+        kill_starting_testnet(pidfile=workdir_pl / f"start_cluster{i}.pid")
+        statedir = workdir_pl / f"state-cluster{i}"
+        env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=i)
         testnet_stop(statedir=statedir, env=env)
     return 0
