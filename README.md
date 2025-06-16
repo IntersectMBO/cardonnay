@@ -1,5 +1,6 @@
 <!-- markdownlint-disable MD033 MD041 -->
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![PyPi Version](https://img.shields.io/pypi/v/cardonnay.svg)](https://pypi.org/project/cardonnay/)
 
 # Cardonnay
 
@@ -97,7 +98,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install Cardonnay
-make install
+pip install cardonnay
 
 # (Optional) Enable shell completions for Bash
 source completions/cardonnay.bash-completion
