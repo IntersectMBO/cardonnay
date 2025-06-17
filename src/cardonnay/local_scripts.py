@@ -119,7 +119,7 @@ class LocalScripts:
         self, template_file: pl.Path, node_rec: NodePorts, instance_num: int
     ) -> str:
         """Replace template variables in given content."""
-        content = template_file.read_text()
+        content = template_file.read_text(encoding="utf-8")
         new_content = content.replace("%%POOL_NUM%%", str(node_rec.num))
         new_content = new_content.replace("%%INSTANCE_NUM%%", str(instance_num))
         new_content = new_content.replace("%%NODE_PORT%%", str(node_rec.node))
@@ -131,7 +131,7 @@ class LocalScripts:
         self, infile: pl.Path, instance_ports: InstancePorts, instance_num: int, ports_per_node: int
     ) -> str:
         """Replace instance variables in given content."""
-        content = infile.read_text()
+        content = infile.read_text(encoding="utf-8")
         # Replace cluster instance number
         new_content = content.replace("%%INSTANCE_NUM%%", str(instance_num))
         # Replace number of pools
@@ -275,7 +275,7 @@ class LocalScripts:
                 instance_num=instance_num,
                 ports_per_node=ports_per_node,
             )
-            outfile.write_text(f"{dest_content}\n")
+            outfile.write_text(f"{dest_content}\n", encoding="utf-8")
 
             # Make `*.sh` files and files without extension executable
             if "." not in fname or fname.endswith(".sh"):
@@ -290,7 +290,7 @@ class LocalScripts:
                     node_rec=node_rec,
                     instance_num=instance_num,
                 )
-                supervisor_script.write_text(f"{supervisor_script_content}\n")
+                supervisor_script.write_text(f"{supervisor_script_content}\n", encoding="utf-8")
                 supervisor_script.chmod(0o755)
 
             node_name = "bft1" if node_rec.num == 0 else f"pool{node_rec.num}"
@@ -300,7 +300,7 @@ class LocalScripts:
                 node_rec=node_rec,
                 instance_num=instance_num,
             )
-            node_config.write_text(f"{node_config_content}\n")
+            node_config.write_text(f"{node_config_content}\n", encoding="utf-8")
 
         self._gen_topology_files(destdir=destdir, addr=addr, nodes=instance_ports.node_ports)
 
@@ -308,7 +308,7 @@ class LocalScripts:
         supervisor_conf_content = self._gen_supervisor_conf(
             instance_num=instance_num, instance_ports=instance_ports
         )
-        supervisor_conf_file.write_text(f"{supervisor_conf_content}\n")
+        supervisor_conf_file.write_text(f"{supervisor_conf_content}\n", encoding="utf-8")
 
     def prepare_scripts_files(
         self,
