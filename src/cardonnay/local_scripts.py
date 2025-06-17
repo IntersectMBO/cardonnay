@@ -275,6 +275,7 @@ class LocalScripts:
                 instance_num=instance_num,
                 ports_per_node=ports_per_node,
             )
+            outfile.unlink(missing_ok=True)
             outfile.write_text(f"{dest_content}\n", encoding="utf-8")
 
             # Make `*.sh` files and files without extension executable
@@ -290,6 +291,7 @@ class LocalScripts:
                     node_rec=node_rec,
                     instance_num=instance_num,
                 )
+                supervisor_script.unlink(missing_ok=True)
                 supervisor_script.write_text(f"{supervisor_script_content}\n", encoding="utf-8")
                 supervisor_script.chmod(0o755)
 
@@ -300,6 +302,7 @@ class LocalScripts:
                 node_rec=node_rec,
                 instance_num=instance_num,
             )
+            node_config.unlink(missing_ok=True)
             node_config.write_text(f"{node_config_content}\n", encoding="utf-8")
 
         self._gen_topology_files(destdir=destdir, addr=addr, nodes=instance_ports.node_ports)
@@ -308,6 +311,7 @@ class LocalScripts:
         supervisor_conf_content = self._gen_supervisor_conf(
             instance_num=instance_num, instance_ports=instance_ports
         )
+        supervisor_conf_file.unlink(missing_ok=True)
         supervisor_conf_file.write_text(f"{supervisor_conf_content}\n", encoding="utf-8")
 
     def prepare_scripts_files(
