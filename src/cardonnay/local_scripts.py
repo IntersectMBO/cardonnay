@@ -261,7 +261,7 @@ class LocalScripts:
         common_dir = indir.parent / "common"
 
         # Reconfigure cluster instance files
-        for infile in itertools.chain(indir.glob("*"), common_dir.glob("*")):
+        for infile in itertools.chain(common_dir.glob("*"), indir.glob("*")):
             fname = infile.name
 
             # Skip template files
@@ -275,6 +275,7 @@ class LocalScripts:
                 instance_num=instance_num,
                 ports_per_node=ports_per_node,
             )
+            outfile.unlink(missing_ok=True)
             outfile.write_text(f"{dest_content}\n", encoding="utf-8")
 
             # Make `*.sh` files and files without extension executable
@@ -290,6 +291,7 @@ class LocalScripts:
                     node_rec=node_rec,
                     instance_num=instance_num,
                 )
+                supervisor_script.unlink(missing_ok=True)
                 supervisor_script.write_text(f"{supervisor_script_content}\n", encoding="utf-8")
                 supervisor_script.chmod(0o755)
 
@@ -300,6 +302,7 @@ class LocalScripts:
                 node_rec=node_rec,
                 instance_num=instance_num,
             )
+            node_config.unlink(missing_ok=True)
             node_config.write_text(f"{node_config_content}\n", encoding="utf-8")
 
         self._gen_topology_files(destdir=destdir, addr=addr, nodes=instance_ports.node_ports)
@@ -308,33 +311,24 @@ class LocalScripts:
         supervisor_conf_content = self._gen_supervisor_conf(
             instance_num=instance_num, instance_ports=instance_ports
         )
+        supervisor_conf_file.unlink(missing_ok=True)
         supervisor_conf_file.write_text(f"{supervisor_conf_content}\n", encoding="utf-8")
 
     def prepare_scripts_files(
         self,
         destdir: pl.Path,
         instance_num: int,
-        start_script: ttypes.FileType = "",
-        stop_script: ttypes.FileType = "",
+        scriptsdir: ttypes.FileType = "",
     ) -> InstanceFiles:
         """Prepare scripts files for starting and stopping cluster instance."""
         destdir = destdir.expanduser().resolve()
+        scriptsdir_final = pl.Path(scriptsdir or self.scripts_dir)
 
-        _start_script = start_script or self.scripts_dir / "start-cluster"
-        _stop_script = stop_script or self.scripts_dir / "stop-cluster"
-
-        start_script = pl.Path(_start_script).expanduser().resolve()
-        stop_script = pl.Path(_stop_script).expanduser().resolve()
-
-        self._reconfigure_local(
-            indir=start_script.parent, destdir=destdir, instance_num=instance_num
-        )
-        new_start_script = destdir / start_script.name
-        new_stop_script = destdir / stop_script.name
+        self._reconfigure_local(indir=scriptsdir_final, destdir=destdir, instance_num=instance_num)
 
         return InstanceFiles(
-            start_script=new_start_script,
-            stop_script=new_stop_script,
+            start_script=destdir / "start-cluster",
+            stop_script=destdir / "stop-cluster",
             start_script_args=[],
             dir=destdir,
         )
@@ -348,21 +342,15 @@ def prepare_scripts_files(
     ports_base: int,
 ) -> InstanceFiles:
     """Prepare scripts files for starting and stopping cluster instance."""
-    start_script: ttypes.FileType = ""
-    stop_script: ttypes.FileType = ""
-
-    if scriptsdir:
-        scriptsdir = pl.Path(scriptsdir)
-        start_script = next(scriptsdir.glob("start-cluster*"), "")
-        if not start_script:
-            msg = f"Start script not found in '{scriptsdir}'."
-            raise RuntimeError(msg)
+    testnet_path = scriptsdir / "testnet.json"
+    if not testnet_path:
+        msg = f"Testnet file not found in '{scriptsdir}'."
+        raise RuntimeError(msg)
 
     local_scripts = LocalScripts(num_pools=num_pools, scripts_dir=scriptsdir, ports_base=ports_base)
     startup_files = local_scripts.prepare_scripts_files(
         destdir=destdir,
         instance_num=instance_num,
-        start_script=start_script,
-        stop_script=stop_script,
+        scriptsdir=scriptsdir,
     )
     return startup_files
