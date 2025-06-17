@@ -318,27 +318,17 @@ class LocalScripts:
         self,
         destdir: pl.Path,
         instance_num: int,
-        start_script: ttypes.FileType = "",
-        stop_script: ttypes.FileType = "",
+        scriptsdir: ttypes.FileType = "",
     ) -> InstanceFiles:
         """Prepare scripts files for starting and stopping cluster instance."""
         destdir = destdir.expanduser().resolve()
+        scriptsdir_final = pl.Path(scriptsdir or self.scripts_dir)
 
-        _start_script = start_script or self.scripts_dir / "start-cluster"
-        _stop_script = stop_script or self.scripts_dir / "stop-cluster"
-
-        start_script = pl.Path(_start_script).expanduser().resolve()
-        stop_script = pl.Path(_stop_script).expanduser().resolve()
-
-        self._reconfigure_local(
-            indir=start_script.parent, destdir=destdir, instance_num=instance_num
-        )
-        new_start_script = destdir / start_script.name
-        new_stop_script = destdir / stop_script.name
+        self._reconfigure_local(indir=scriptsdir_final, destdir=destdir, instance_num=instance_num)
 
         return InstanceFiles(
-            start_script=new_start_script,
-            stop_script=new_stop_script,
+            start_script=destdir / "start-cluster",
+            stop_script=destdir / "stop-cluster",
             start_script_args=[],
             dir=destdir,
         )
@@ -352,21 +342,15 @@ def prepare_scripts_files(
     ports_base: int,
 ) -> InstanceFiles:
     """Prepare scripts files for starting and stopping cluster instance."""
-    start_script: ttypes.FileType = ""
-    stop_script: ttypes.FileType = ""
-
-    if scriptsdir:
-        scriptsdir = pl.Path(scriptsdir)
-        start_script = next(scriptsdir.glob("start-cluster*"), "")
-        if not start_script:
-            msg = f"Start script not found in '{scriptsdir}'."
-            raise RuntimeError(msg)
+    testnet_path = scriptsdir / "testnet.json"
+    if not testnet_path:
+        msg = f"Testnet file not found in '{scriptsdir}'."
+        raise RuntimeError(msg)
 
     local_scripts = LocalScripts(num_pools=num_pools, scripts_dir=scriptsdir, ports_base=ports_base)
     startup_files = local_scripts.prepare_scripts_files(
         destdir=destdir,
         instance_num=instance_num,
-        start_script=start_script,
-        stop_script=stop_script,
+        scriptsdir=scriptsdir,
     )
     return startup_files
