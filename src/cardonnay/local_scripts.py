@@ -261,7 +261,7 @@ class LocalScripts:
         common_dir = indir.parent / "common"
 
         # Reconfigure cluster instance files
-        for infile in itertools.chain(indir.glob("*"), common_dir.glob("*")):
+        for infile in itertools.chain(common_dir.glob("*"), indir.glob("*")):
             fname = infile.name
 
             # Skip template files
