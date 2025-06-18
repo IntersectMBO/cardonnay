@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+  echo "CARDANO_NODE_SOCKET_PATH is not set" >&2
+  exit 1
+fi
+
 SOCKET_PATH="$(readlink -m "$CARDANO_NODE_SOCKET_PATH")"
 STATE_CLUSTER="${SOCKET_PATH%/*}"
 INSTANCE_NUM="${STATE_CLUSTER#*state-cluster}"
