@@ -118,7 +118,7 @@ serverurl = unix:///${SUPERVISORD_SOCKET_PATH}
 EoF
 
 # enable db-sync service
-if [ -n "${DBSYNC_SCHEMA:-""}" ]; then
+if [ -n "${DBSYNC_SCHEMA_DIR:-""}" ]; then
   command -v cardano-db-sync > /dev/null 2>&1 || \
     { echo "The \`cardano-db-sync\` binary not found, line $LINENO" >&2; exit 1; }  # assert
 
@@ -140,7 +140,7 @@ EoF
 fi
 
 # enable smash service
-if [ -n "${DBSYNC_SCHEMA:-""}" ] && [ -n "${SMASH:-""}" ]; then
+if [ -n "${DBSYNC_SCHEMA_DIR:-""}" ] && [ -n "${SMASH:-""}" ]; then
   command -v cardano-smash-server > /dev/null 2>&1 || \
     { echo "The \`cardano-smash-server\` binary not found, line $LINENO" >&2; exit 1; }  # assert
 
@@ -587,13 +587,13 @@ done
 
 
 # start db-sync
-if [ -n "${DBSYNC_SCHEMA:-""}" ]; then
+if [ -n "${DBSYNC_SCHEMA_DIR:-""}" ]; then
   echo "Starting db-sync"
   supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start dbsync
 fi
 
 # start smash
-if [ -n "${DBSYNC_SCHEMA:-""}" ] && [ -n "${SMASH:-""}" ]; then
+if [ -n "${DBSYNC_SCHEMA_DIR:-""}" ] && [ -n "${SMASH:-""}" ]; then
   echo "Starting smash"
   supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start smash
 fi
