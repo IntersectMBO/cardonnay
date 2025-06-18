@@ -127,10 +127,12 @@ if [ -n "${DBSYNC_SCHEMA_DIR:-""}" ]; then
     "${SCRIPT_DIR}/postgres-setup.sh"
   fi
 
+  cp "${SCRIPT_DIR}/run-cardano-dbsync" "$STATE_CLUSTER"
+
   cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
 [program:dbsync]
-command=${SCRIPT_DIR}/run-cardano-dbsync
+command=./${STATE_CLUSTER_NAME}/run-cardano-dbsync
 stderr_logfile=./${STATE_CLUSTER_NAME}/dbsync.stderr
 stdout_logfile=./${STATE_CLUSTER_NAME}/dbsync.stdout
 autostart=false
@@ -144,10 +146,12 @@ if [ -n "${DBSYNC_SCHEMA_DIR:-""}" ] && [ -n "${SMASH:-""}" ]; then
   command -v cardano-smash-server > /dev/null 2>&1 || \
     { echo "The \`cardano-smash-server\` binary not found, line $LINENO" >&2; exit 1; }  # assert
 
+  cp "${SCRIPT_DIR}/run-cardano-smash" "$STATE_CLUSTER"
+
   cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
 [program:smash]
-command=${SCRIPT_DIR}/run-cardano-smash
+command=./${STATE_CLUSTER_NAME}/run-cardano-smash
 stderr_logfile=./${STATE_CLUSTER_NAME}/smash.stderr
 stdout_logfile=./${STATE_CLUSTER_NAME}/smash.stdout
 autostart=false
@@ -158,10 +162,12 @@ fi
 
 # enable cardano-submit-api service
 if [ "$ENABLE_SUBMIT_API" -eq 1 ]; then
+  cp "${SCRIPT_DIR}/run-cardano-submit-api" "$STATE_CLUSTER"
+
   cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
 [program:submit_api]
-command=${SCRIPT_DIR}/run-cardano-submit-api
+command=./${STATE_CLUSTER_NAME}/run-cardano-submit-api
 stderr_logfile=./${STATE_CLUSTER_NAME}/submit_api.stderr
 stdout_logfile=./${STATE_CLUSTER_NAME}/submit_api.stdout
 autostart=false
