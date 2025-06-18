@@ -75,7 +75,8 @@ This will provide a fully set-up environment, including Python, Cardano binaries
 > ℹ️ **NOTE:** To use the latest `master` branch of `cardano-node`, run
 
   ```sh
-  nix develop --override-input cardano-node "github:input-output-hk/cardano-node/master" --recreate-lock-file
+  nix flake update --accept-flake-config --override-input cardano-node github:IntersectMBO/cardano-node/master
+  nix develop --accept-flake-config
   ```
 
 ---
