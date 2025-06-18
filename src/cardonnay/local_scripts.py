@@ -260,7 +260,9 @@ class LocalScripts:
         addr = "127.0.0.1"
         common_dir = indir.parent / "common"
 
-        # Reconfigure cluster instance files
+        # Reconfigure cluster instance files.
+        # Make sure the files originating from "common" dir are overwritten if there are
+        # duplicate files in the `indir`.
         for infile in itertools.chain(common_dir.glob("*"), indir.glob("*")):
             fname = infile.name
 
