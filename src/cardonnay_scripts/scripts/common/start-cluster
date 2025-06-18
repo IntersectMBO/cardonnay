@@ -118,9 +118,9 @@ serverurl = unix:///${SUPERVISORD_SOCKET_PATH}
 EoF
 
 # enable db-sync service
-if [ -n "${DBSYNC_REPO:-""}" ]; then
-  [ -e "${DBSYNC_REPO}/db-sync-node/bin/cardano-db-sync" ] || \
-    { echo "The \`${DBSYNC_REPO}/db-sync-node/bin/cardano-db-sync\` not found, line $LINENO" >&2; exit 1; }  # assert
+if [ -n "${DBSYNC_SCHEMA:-""}" ]; then
+  command -v cardano-db-sync > /dev/null 2>&1 || \
+    { echo "The \`cardano-db-sync\` binary not found, line $LINENO" >&2; exit 1; }  # assert
 
   # create clean database
   if [ -z "${DRY_RUN:-""}" ]; then
@@ -140,9 +140,9 @@ EoF
 fi
 
 # enable smash service
-if [ -n "${DBSYNC_REPO:-""}" ] && [ -n "${SMASH:-""}" ]; then
-  [ -e "${DBSYNC_REPO}/smash-server/bin/cardano-smash-server" ] || \
-    { echo "The \`${DBSYNC_REPO}/smash-server/bin/cardano-smash-server\` not found, line $LINENO" >&2; exit 1; }  # assert
+if [ -n "${DBSYNC_SCHEMA:-""}" ] && [ -n "${SMASH:-""}" ]; then
+  command -v cardano-smash-server > /dev/null 2>&1 || \
+    { echo "The \`cardano-smash-server\` binary not found, line $LINENO" >&2; exit 1; }  # assert
 
   cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
@@ -587,13 +587,13 @@ done
 
 
 # start db-sync
-if [ -n "${DBSYNC_REPO:-""}" ]; then
+if [ -n "${DBSYNC_SCHEMA:-""}" ]; then
   echo "Starting db-sync"
   supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start dbsync
 fi
 
 # start smash
-if [ -n "${DBSYNC_REPO:-""}" ] && [ -n "${SMASH:-""}" ]; then
+if [ -n "${DBSYNC_SCHEMA:-""}" ] && [ -n "${SMASH:-""}" ]; then
   echo "Starting smash"
   supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start smash
 fi

@@ -2,18 +2,9 @@
 
 set -uo pipefail
 
-retval=0
-
 if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
   echo "CARDANO_NODE_SOCKET_PATH is not set" >&2
-  retval=1
-fi
-if [ -z "${DBSYNC_REPO:-}" ]; then
-  echo "DBSYNC_REPO is not set" >&2
-  retval=1
-fi
-if [ "$retval" -ne 0 ]; then
-  exit "$retval"
+  exit 1
 fi
 
 SOCKET_PATH="$(readlink -m "$CARDANO_NODE_SOCKET_PATH")"
@@ -27,4 +18,4 @@ export SMASH_ADMINS_FILE="$STATE_CLUSTER/admins.txt"
 
 echo "${SMASH_ADMIN}, ${SMASH_PASSWORD}" > "$SMASH_ADMINS_FILE"
 
-exec "$DBSYNC_REPO/smash-server/bin/cardano-smash-server" --config "./$STATE_CLUSTER_NAME/dbsync-config.yaml" --port %%SMASH_PORT%% --admins "$SMASH_ADMINS_FILE"
+exec cardano-smash-server --config "./$STATE_CLUSTER_NAME/dbsync-config.yaml" --port %%SMASH_PORT%% --admins "$SMASH_ADMINS_FILE"
