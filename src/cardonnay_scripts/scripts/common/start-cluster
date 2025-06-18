@@ -3,6 +3,11 @@
 set -Eeuo pipefail
 trap 'echo "Error at line $LINENO"' ERR
 
+if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+  echo "CARDANO_NODE_SOCKET_PATH is not set" >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(readlink -m "${0%/*}")"
 SOCKET_PATH="$(readlink -m "$CARDANO_NODE_SOCKET_PATH")"
 STATE_CLUSTER="${SOCKET_PATH%/*}"
