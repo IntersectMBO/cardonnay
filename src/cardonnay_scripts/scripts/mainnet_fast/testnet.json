@@ -2,7 +2,7 @@
     "name": "mainnet_fast",
     "description": "Local testnet that starts directly in Conway era and has the same epoch length as Mainnet.",
     "control_env": {
-        "DBSYNC_REPO": "will start and configure db-sync if the value is path to db-sync repository",
+        "DBSYNC_SCHEMA": "will start and configure db-sync if the value is path to db-sync schema directory",
         "SMASH": "if set, will start and configure smash",
         "ENABLE_LEGACY": "if set, local cluster will use legacy networking",
         "MIXED_P2P": "if set, local cluster will use P2P for some nodes and legacy topology for others",
