@@ -2,7 +2,7 @@
     "name": "conway_fast",
     "description": "Local testnet that starts directly in Conway era.",
     "control_env": {
-        "DBSYNC_SCHEMA": "will start and configure db-sync if the value is path to db-sync schema directory",
+        "DBSYNC_SCHEMA_DIR": "will start and configure db-sync if the value is path to db-sync schema directory",
         "SMASH": "if set, will start and configure smash",
         "ENABLE_LEGACY": "if set, local cluster will use legacy networking",
         "MIXED_P2P": "if set, local cluster will use P2P for some nodes and legacy topology for others",
