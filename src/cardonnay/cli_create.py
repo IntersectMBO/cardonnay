@@ -3,7 +3,8 @@ import json
 import logging
 import pathlib as pl
 import shutil
-import time
+
+import filelock
 
 import cardonnay_scripts
 from cardonnay import ca_utils
@@ -13,7 +14,6 @@ from cardonnay import local_scripts
 from cardonnay import structs
 
 LOGGER = logging.getLogger(__name__)
-STATUS_FILE = "cardonnay_starting"
 
 
 def write_env_vars(env: dict[str, str], workdir: pl.Path, instance_num: int) -> None:
@@ -51,35 +51,6 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
     else:
         helpers.print_json(data=avail_scripts)
     return 0
-
-
-def get_early_start_instances(workdir: pl.Path) -> set[int]:
-    """Get the set of instances that are currently starting based on file modification time.
-
-    An instance can be in a state where it is starting, but the supervisord.sock was not
-    created yet, so it is not considered as properly "starting" yet.
-    """
-    valid_time_sec = 10
-    starting = set()
-    sf_len = len(STATUS_FILE)
-    now = time.time()
-
-    for sf in workdir.glob(f"{STATUS_FILE}*"):
-        try:
-            mtime = sf.stat().st_mtime
-        except FileNotFoundError:
-            continue
-
-        if now - mtime < valid_time_sec:
-            try:
-                instance_num = int(sf.name[sf_len:])
-                starting.add(instance_num)
-            except ValueError:
-                LOGGER.warning(f"Invalid status file name: {sf}")
-        else:
-            sf.unlink()
-
-    return starting
 
 
 def get_start_info(statedir: pl.Path, testnet_variant: str) -> structs.StartInfo:
@@ -213,23 +184,25 @@ def cmd_create(  # noqa: PLR0911, C901
     workdir_pl = ca_utils.get_workdir(workdir=workdir)
     workdir_abs = workdir_pl.absolute()
 
-    avail_instances_gen = ca_utils.get_available_instances(workdir=workdir_abs)
-    early_start_instances = get_early_start_instances(workdir=workdir_abs)
-    if instance_num < 0:
-        for _ in range(ca_utils.MAX_INSTANCES + 1):
-            try:
-                instance_num = next(avail_instances_gen)
-            except StopIteration:
-                LOGGER.error("All instances are already in use.")  # noqa: TRY400
-                return 1
-            if instance_num not in early_start_instances:
-                break
-    elif instance_num not in avail_instances_gen or instance_num in early_start_instances:
-        LOGGER.error(f"Instance number {instance_num} is already in use.")
-        return 1
+    lockfile = str(workdir_abs / ca_utils.DELAY_LOCK)
+    with filelock.FileLock(lock_file=lockfile, timeout=2):
+        avail_instances_gen = ca_utils.get_available_instances(workdir=workdir_abs)
+        delay_instances = ca_utils.get_delay_instances(workdir=workdir_abs)
+        if instance_num < 0:
+            for _ in range(ca_utils.MAX_INSTANCES + 1):
+                try:
+                    instance_num = next(avail_instances_gen)
+                except StopIteration:
+                    LOGGER.error("All instances are already in use.")  # noqa: TRY400
+                    return 1
+                if instance_num not in delay_instances:
+                    break
+        elif instance_num not in avail_instances_gen or instance_num in delay_instances:
+            LOGGER.error(f"Instance number {instance_num} is already in use.")
+            return 1
 
-    status_file = workdir_pl / f"{STATUS_FILE}{instance_num}"
-    status_file.touch()
+        status_file = workdir_pl / f"{ca_utils.DELAY_STATUS}{instance_num}"
+        status_file.touch()
 
     destdir = workdir_pl / f"cluster{instance_num}_{testnet_variant}"
     destdir_abs = destdir.absolute()

@@ -184,6 +184,9 @@ def cmd_actions(
     if not ca_utils.has_supervisorctl():
         return 1
 
+    if not ca_utils.delay_instance(instance_num=instance_num, workdir=workdir_pl):
+        return 1
+
     if stop:
         kill_starting_testnet(pidfile=workdir_pl / f"start_cluster{instance_num}.pid")
         testnet_stop(statedir=statedir, env=env)
@@ -202,6 +205,8 @@ def cmd_stopall(workdir: str) -> int:
     """Stop all running testnet instances."""
     workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
     for i in ca_utils.get_running_instances(workdir=workdir_pl):
+        if not ca_utils.delay_instance(instance_num=i, workdir=workdir_pl):
+            continue
         kill_starting_testnet(pidfile=workdir_pl / f"start_cluster{i}.pid")
         statedir = workdir_pl / f"state-cluster{i}"
         env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=i)
