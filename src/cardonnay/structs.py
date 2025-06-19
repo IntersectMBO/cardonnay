@@ -52,6 +52,14 @@ class InstanceInfo(pydantic.BaseModel):
     supervisor_env: SupervisorData
 
 
+class StartInfo(pydantic.BaseModel):
+    instance: int
+    type: str
+    dir: pl.Path
+    start_pid: int | None
+    start_logfile: pl.Path | None
+
+
 class InstanceSummary(pydantic.BaseModel):
     instance: int
     type: str

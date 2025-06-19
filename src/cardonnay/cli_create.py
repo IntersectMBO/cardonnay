@@ -1,16 +1,19 @@
+import contextlib
 import json
 import logging
 import pathlib as pl
 import shutil
+import time
 
 import cardonnay_scripts
 from cardonnay import ca_utils
 from cardonnay import colors
 from cardonnay import helpers
-from cardonnay import inspect_instance
 from cardonnay import local_scripts
+from cardonnay import structs
 
 LOGGER = logging.getLogger(__name__)
+STATUS_FILE = "cardonnay_starting"
 
 
 def write_env_vars(env: dict[str, str], workdir: pl.Path, instance_num: int) -> None:
@@ -50,11 +53,71 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
     return 0
 
 
+def get_early_start_instances(workdir: pl.Path) -> set[int]:
+    """Get the set of instances that are currently starting based on file modification time.
+
+    An instance can be in a state where it is starting, but the supervisord.sock was not
+    created yet, so it is not considered as properly "starting" yet.
+    """
+    valid_time_sec = 10
+    starting = set()
+    sf_len = len(STATUS_FILE)
+    now = time.time()
+
+    for sf in workdir.glob(f"{STATUS_FILE}*"):
+        try:
+            mtime = sf.stat().st_mtime
+        except FileNotFoundError:
+            continue
+
+        if now - mtime < valid_time_sec:
+            try:
+                instance_num = int(sf.name[sf_len:])
+                starting.add(instance_num)
+            except ValueError:
+                LOGGER.warning(f"Invalid status file name: {sf}")
+        else:
+            sf.unlink()
+
+    return starting
+
+
+def get_start_info(statedir: pl.Path, testnet_variant: str) -> structs.StartInfo:
+    """Get information about the starting testnet instance."""
+    instance_num = int(statedir.name.replace("state-cluster", ""))
+    workdir = statedir.parent
+
+    start_pid = -1
+    pidfile = workdir / f"start_cluster{instance_num}.pid"
+    if pidfile.exists():
+        pid = 0
+        with contextlib.suppress(Exception):
+            pid = int(helpers.read_from_file(pidfile))
+        if pid:
+            start_pid = pid
+
+    start_logfile = None
+    logfile = workdir / f"start_cluster{instance_num}.log"
+    if logfile.exists():
+        start_logfile = logfile
+
+    start_info = structs.StartInfo(
+        instance=instance_num,
+        type=testnet_variant,
+        dir=statedir,
+        start_pid=start_pid if start_pid > 0 else None,
+        start_logfile=start_logfile,
+    )
+
+    return start_info
+
+
 def testnet_start(
     testnetdir: pl.Path,
     workdir: pl.Path,
     env: dict,
     instance_num: int,
+    testnet_variant: str,
     background: bool,
 ) -> int:
     """Start the testnet cluster using the start script."""
@@ -76,14 +139,12 @@ def testnet_start(
             command=str(start_script), logfile=logfile, workdir=workdir
         )
 
-        statedir = workdir / f"state-cluster{instance_num}"
-        helpers.wait_for_file(file=statedir / "supervisord.sock", timeout=10)
-
         pidfile = workdir / f"start_cluster{instance_num}.pid"
         pidfile.unlink(missing_ok=True)
         pidfile.write_text(str(start_process.pid))
 
-        helpers.print_json(inspect_instance.get_testnet_info(statedir=statedir))
+        statedir = workdir / f"state-cluster{instance_num}"
+        helpers.print_json(get_start_info(statedir=statedir, testnet_variant=testnet_variant))
     else:
         print(
             f"{colors.BColors.OKGREEN}Starting the testnet cluster with "
@@ -153,15 +214,23 @@ def cmd_create(  # noqa: PLR0911, C901
     workdir_abs = workdir_pl.absolute()
 
     avail_instances_gen = ca_utils.get_available_instances(workdir=workdir_abs)
+    early_start_instances = get_early_start_instances(workdir=workdir_abs)
     if instance_num < 0:
-        try:
-            instance_num = next(avail_instances_gen)
-        except StopIteration:
-            LOGGER.error("All instances are already in use.")  # noqa: TRY400
-            return 1
-    elif instance_num not in avail_instances_gen:
+        for _ in range(ca_utils.MAX_INSTANCES + 1):
+            try:
+                instance_num = next(avail_instances_gen)
+            except StopIteration:
+                LOGGER.error("All instances are already in use.")  # noqa: TRY400
+                return 1
+            if instance_num not in early_start_instances:
+                break
+    elif instance_num not in avail_instances_gen or instance_num in early_start_instances:
         LOGGER.error(f"Instance number {instance_num} is already in use.")
         return 1
+
+    status_file = workdir_pl / f"{STATUS_FILE}{instance_num}"
+    status_file.touch()
+
     destdir = workdir_pl / f"cluster{instance_num}_{testnet_variant}"
     destdir_abs = destdir.absolute()
 
@@ -207,6 +276,7 @@ def cmd_create(  # noqa: PLR0911, C901
             workdir=workdir_abs,
             env=env,
             instance_num=instance_num,
+            testnet_variant=testnet_variant,
             background=background,
         )
         if run_retval > 0:
