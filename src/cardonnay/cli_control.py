@@ -187,28 +187,33 @@ def cmd_actions(
     if not ca_utils.delay_instance(instance_num=instance_num, workdir=workdir_pl):
         return 1
 
+    run_retval = 0
     if stop:
         kill_starting_testnet(pidfile=workdir_pl / f"start_cluster{instance_num}.pid")
-        testnet_stop(statedir=statedir, env=env)
+        run_retval = testnet_stop(statedir=statedir, env=env)
     elif restart:
-        testnet_restart_all(statedir=statedir, env=env)
+        run_retval = testnet_restart_all(statedir=statedir, env=env)
     elif restart_nodes:
-        testnet_restart_nodes(statedir=statedir, env=env)
+        run_retval = testnet_restart_nodes(statedir=statedir, env=env)
     else:
         LOGGER.error("No valid action was selected.")
         return 1
 
-    return 0
+    return run_retval
 
 
 def cmd_stopall(workdir: str) -> int:
     """Stop all running testnet instances."""
+    run_retval = 0
     workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
     for i in ca_utils.get_running_instances(workdir=workdir_pl):
         if not ca_utils.delay_instance(instance_num=i, workdir=workdir_pl):
+            run_retval = 1
             continue
         kill_starting_testnet(pidfile=workdir_pl / f"start_cluster{i}.pid")
         statedir = workdir_pl / f"state-cluster{i}"
         env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=i)
-        testnet_stop(statedir=statedir, env=env)
-    return 0
+        stop_retval = testnet_stop(statedir=statedir, env=env)
+        run_retval = stop_retval if stop_retval != 0 else run_retval
+
+    return run_retval
