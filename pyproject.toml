@@ -29,6 +29,7 @@ dependencies = [
     "click >= 7.0",
     "pygments >= 2.0",
     "pydantic >= 2.0",
+    "filelock >= 3.0"
 ]
 
 [project.urls]
