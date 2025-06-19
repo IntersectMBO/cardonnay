@@ -172,7 +172,7 @@ def get_testnet_info(statedir: pl.Path) -> structs.InstanceInfo:
         testnet_info = {}
 
     testnet_name = testnet_info.get("name") or "unknown"
-    instance_num = int(statedir.name.replace("state-cluster", ""))
+    instance_num = int(statedir.name[ca_utils.STATE_CLUSTER_PREFIX_LEN :])
 
     workdir = statedir.parent
 

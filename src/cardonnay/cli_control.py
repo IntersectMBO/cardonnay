@@ -100,7 +100,7 @@ def print_instances(workdir: pl.Path) -> None:
     out_list: list[structs.InstanceSummary] = []
 
     for i in running_instances:
-        statedir = workdir / f"state-cluster{i}"
+        statedir = workdir / f"{ca_utils.STATE_CLUSTER_PREFIX}{i}"
 
         with (
             contextlib.suppress(Exception),
@@ -174,7 +174,7 @@ def cmd_actions(
         LOGGER.error("Valid instance number is required.")
         return 1
 
-    statedir = workdir_pl / f"state-cluster{instance_num}"
+    statedir = workdir_pl / f"{ca_utils.STATE_CLUSTER_PREFIX}{instance_num}"
     env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=instance_num)
 
     if instance_num not in ca_utils.get_running_instances(workdir=workdir_pl):
@@ -211,7 +211,7 @@ def cmd_stopall(workdir: str) -> int:
             run_retval = 1
             continue
         kill_starting_testnet(pidfile=workdir_pl / f"start_cluster{i}.pid")
-        statedir = workdir_pl / f"state-cluster{i}"
+        statedir = workdir_pl / f"{ca_utils.STATE_CLUSTER_PREFIX}{i}"
         env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=i)
         stop_retval = testnet_stop(statedir=statedir, env=env)
         run_retval = stop_retval if stop_retval != 0 else run_retval

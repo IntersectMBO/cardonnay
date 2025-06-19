@@ -25,7 +25,7 @@ def check_prereq(
 
 def cmd_faucet(workdir: str, instance_num: int) -> int:
     workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
-    statedir = workdir_pl / f"state-cluster{instance_num}"
+    statedir = workdir_pl / f"{ca_utils.STATE_CLUSTER_PREFIX}{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret
@@ -36,7 +36,7 @@ def cmd_faucet(workdir: str, instance_num: int) -> int:
 
 def cmd_pools(workdir: str, instance_num: int) -> int:
     workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
-    statedir = workdir_pl / f"state-cluster{instance_num}"
+    statedir = workdir_pl / f"{ca_utils.STATE_CLUSTER_PREFIX}{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret
@@ -50,7 +50,7 @@ def cmd_pools(workdir: str, instance_num: int) -> int:
 
 def cmd_status(workdir: str, instance_num: int) -> int:
     workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
-    statedir = workdir_pl / f"state-cluster{instance_num}"
+    statedir = workdir_pl / f"{ca_utils.STATE_CLUSTER_PREFIX}{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret
@@ -61,7 +61,7 @@ def cmd_status(workdir: str, instance_num: int) -> int:
 
 def cmd_config(workdir: str, instance_num: int) -> int:
     workdir_pl = ca_utils.get_workdir(workdir=workdir).absolute()
-    statedir = workdir_pl / f"state-cluster{instance_num}"
+    statedir = workdir_pl / f"{ca_utils.STATE_CLUSTER_PREFIX}{instance_num}"
 
     if (ret := check_prereq(statedir=statedir, instance_num=instance_num)) > 0:
         return ret
