@@ -86,6 +86,7 @@ target/
 
 # virtualenv
 .venv*
+.nix_venv
 venv/
 ENV/
 
