@@ -46,6 +46,7 @@ class InstanceInfo(pydantic.BaseModel):
     dir: pl.Path
     comment: str | None
     submit_api_port: int | None
+    supervisord_pid: int | None
     start_pid: int | None
     start_logfile: pl.Path | None
     control_env: dict[str, str]
