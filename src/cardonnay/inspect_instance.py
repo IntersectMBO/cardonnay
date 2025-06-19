@@ -176,12 +176,21 @@ def get_testnet_info(statedir: pl.Path) -> structs.InstanceInfo:
 
     workdir = statedir.parent
 
-    start_pid = -1
-    pidfile = workdir / f"start_cluster{instance_num}.pid"
-    if pidfile.exists() and testnet_state == consts.States.STARTING:
+    supervisord_pid = -1
+    supervisord_pidfile = statedir / "supervisord.pid"
+    if supervisord_pidfile.exists():
         pid = 0
         with contextlib.suppress(Exception):
-            pid = int(helpers.read_from_file(pidfile))
+            pid = int(helpers.read_from_file(supervisord_pidfile))
+        if pid:
+            supervisord_pid = pid
+
+    start_pid = -1
+    start_pidfile = workdir / f"start_cluster{instance_num}.pid"
+    if start_pidfile.exists() and testnet_state == consts.States.STARTING:
+        pid = 0
+        with contextlib.suppress(Exception):
+            pid = int(helpers.read_from_file(start_pidfile))
         if pid:
             start_pid = pid
 
@@ -197,6 +206,7 @@ def get_testnet_info(statedir: pl.Path) -> structs.InstanceInfo:
         dir=statedir,
         comment=testnet_info.get("comment"),
         submit_api_port=sp if (sp := get_submit_api_port(statedir=statedir)) > 0 else None,
+        supervisord_pid=supervisord_pid if supervisord_pid > 0 else None,
         start_pid=start_pid if start_pid > 0 else None,
         start_logfile=start_logfile,
         control_env=get_control_env(statedir=statedir),
