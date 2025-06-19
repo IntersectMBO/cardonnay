@@ -24,6 +24,8 @@ Starting the testnet cluster with `/var/tmp/cardonnay/cluster0_conway_fast/start
 Cluster started 🚀
 ```
 
+> ℹ️ **Pro Tip:** Add `-b` to create the testnet in the background, or `-c "comment"` to add a comment.
+
 ### 2. List running testnet instances
 
 `$ cardonnay control ls`
