@@ -55,7 +55,7 @@ def print_available_testnets(scripts_base: pl.Path, verbose: bool) -> int:
 
 def get_start_info(statedir: pl.Path, testnet_variant: str) -> structs.StartInfo:
     """Get information about the starting testnet instance."""
-    instance_num = int(statedir.name.replace("state-cluster", ""))
+    instance_num = int(statedir.name[ca_utils.STATE_CLUSTER_PREFIX_LEN :])
     workdir = statedir.parent
 
     start_pid = -1
@@ -114,7 +114,7 @@ def testnet_start(
         pidfile.unlink(missing_ok=True)
         pidfile.write_text(str(start_process.pid))
 
-        statedir = workdir / f"state-cluster{instance_num}"
+        statedir = workdir / f"{ca_utils.STATE_CLUSTER_PREFIX}{instance_num}"
         helpers.print_json(get_start_info(statedir=statedir, testnet_variant=testnet_variant))
     else:
         print(

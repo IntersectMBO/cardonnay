@@ -16,10 +16,14 @@ TESTNET_JSON = "testnet.json"
 STATUS_STARTED = "status_started"
 DELAY_STATUS = "delay_stat"
 DELAY_LOCK = "delay.lock"
+STATE_CLUSTER_PREFIX = "state-cluster"
+STATE_CLUSTER_PREFIX_LEN = len("state-cluster")
 
 
 def create_env_vars(workdir: pl.Path, instance_num: int) -> dict[str, str]:
-    env = {"CARDANO_NODE_SOCKET_PATH": f"{workdir}/state-cluster{instance_num}/bft1.socket"}
+    env = {
+        "CARDANO_NODE_SOCKET_PATH": f"{workdir}/{STATE_CLUSTER_PREFIX}{instance_num}/bft1.socket"
+    }
     return env
 
 
@@ -37,8 +41,8 @@ def get_workdir(workdir: ttypes.FileType) -> pl.Path:
 
 def get_running_instances(workdir: pl.Path) -> set[int]:
     instances = {
-        int(s.parent.name.replace("state-cluster", ""))
-        for s in workdir.glob("state-cluster*/supervisord.sock")
+        int(s.parent.name[STATE_CLUSTER_PREFIX_LEN:])
+        for s in workdir.glob(f"{STATE_CLUSTER_PREFIX}*/supervisord.sock")
     }
     return instances
 
