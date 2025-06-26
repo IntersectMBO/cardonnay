@@ -53,7 +53,14 @@ Cluster started 🚀
 }
 ```
 
-### 4. Stop all running testnet instances
+### 4. Work with the testnet
+
+```sh
+source <(cardonnay control print-env -i 0)
+cardano-cli query tip --testnet-magic 42
+```
+
+### 5. Stop all running testnet instances
 
 ```sh
 $ cardonnay control stop-all
