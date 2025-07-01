@@ -12,10 +12,21 @@ repos:
     language_version: python3
   - id: debug-statements
     language_version: python3
-- repo: https://github.com/charliermarsh/ruff-pre-commit
-  rev: v0.11.12
+- repo: local
   hooks:
-    - id: ruff
+  - id: pyrefly
+    name: pyrefly
+    entry: pyrefly
+    # pyrefly is stupid and adds 'src' to 'project-excludes',
+    # so it must be added here
+    args: [ check, --remove-unused-ignores, src ]
+    pass_filenames: false
+    language: system
+    types: [python]
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  rev: v0.12.1
+  hooks:
+    - id: ruff-check
       args: [ --fix ]
     - id: ruff-format
 - repo: https://github.com/shellcheck-py/shellcheck-py
@@ -28,13 +39,6 @@ repos:
   - id: markdownlint
 - repo: local
   hooks:
-  - id: pyrefly
-    name: pyrefly
-    entry: pyrefly
-    args: [ check, --remove-unused-ignores ]
-    pass_filenames: false
-    language: system
-    types: [python]
   - id: mypy
     name: mypy
     entry: mypy

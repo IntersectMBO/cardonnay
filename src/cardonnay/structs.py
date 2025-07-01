@@ -8,7 +8,9 @@ class KeyPair(pydantic.BaseModel):
     skey_file: pl.Path
 
 
-class ColdKeyPair(KeyPair):
+class ColdKeyPair(pydantic.BaseModel):
+    vkey_file: pl.Path
+    skey_file: pl.Path
     counter_file: pl.Path
 
 
