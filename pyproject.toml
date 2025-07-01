@@ -11,7 +11,7 @@ description = "Cardano Local Testnet"
 readme = "README.md"
 requires-python = ">=3.9"
 keywords = ["cardano", "cardano-node", "cardano-cli"]
-license = {text = "Apache License 2.0"}
+license = "Apache-2.0"
 classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
