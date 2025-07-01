@@ -17,7 +17,7 @@ repos:
   - id: pyrefly
     name: pyrefly
     entry: pyrefly
-    # pyrefly is stupid and adds 'src' to 'project-excludes',
+    # pyrefly doesn't handle editable installs and adds 'src' to 'project-excludes',
     # so it must be added here
     args: [ check, --remove-unused-ignores, src ]
     pass_filenames: false
