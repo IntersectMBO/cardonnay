@@ -1041,13 +1041,15 @@ if [ "$ENABLE_SUBMIT_API" -eq 1 ]; then
   supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start submit_api
 fi
 
-cardano_cli_log latest query protocol-parameters \
+# Workaround for https://github.com/IntersectMBO/cardano-cli/issues/1262
+if cardano_cli_log latest query protocol-parameters \
   --testnet-magic "$NETWORK_MAGIC" \
-  --out-file "${STATE_CLUSTER}/pparams.json"
+  --out-file "${STATE_CLUSTER}/pparams.json"; then
 
-PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
+  PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
 
-[ "$PROTOCOL_VERSION" = 6 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+  [ "$PROTOCOL_VERSION" = 6 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+fi
 
 sleep "$PROPOSAL_DELAY"
 echo "Submitting update proposal to update to Babbage"
@@ -1145,13 +1147,15 @@ wait_for_epoch "$((BABBAGE_EPOCH + 1))"
 
 BABBAGE_PV8_EPOCH="$(get_epoch)"
 
-cardano_cli_log latest query protocol-parameters \
+# Workaround for https://github.com/IntersectMBO/cardano-cli/issues/1262
+if cardano_cli_log latest query protocol-parameters \
   --testnet-magic "$NETWORK_MAGIC" \
-  --out-file "${STATE_CLUSTER}/pparams.json"
+  --out-file "${STATE_CLUSTER}/pparams.json"; then
 
-PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
+  PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
 
-[ "$PROTOCOL_VERSION" = 8 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+  [ "$PROTOCOL_VERSION" = 8 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+fi
 
 # update to Conway
 sleep "$PROPOSAL_DELAY"
