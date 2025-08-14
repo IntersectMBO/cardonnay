@@ -1343,7 +1343,7 @@ if [ -z "${PV9:-""}" ]; then
     exit 1
   fi
 
-  ACTION_TXID="$(cardano_cli_log conway transaction txid --tx-body-file "${PV10_ACTION}-tx.txbody")"
+  ACTION_TXID="$(cardano_cli_log conway transaction txid --output-text --tx-body-file "${PV10_ACTION}-tx.txbody")"
 
   echo "Voting on hard fork proposal"
 
