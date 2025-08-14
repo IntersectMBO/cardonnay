@@ -2,7 +2,7 @@
   description = "Cardonnay - Cardano local testnets";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     cardano-node = {
       url = "github:IntersectMBO/cardano-node";
     };
