@@ -19,7 +19,7 @@ if [[ "$SOCKET_PATH" != *"/state-cluster${INSTANCE_NUM}/"* ]]; then
 fi
 
 if [ -e "$SUPERVISORD_SOCKET_PATH" ]; then
-  supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" stop all
+  supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" stop all || rm -f "$SUPERVISORD_SOCKET_PATH"
 fi
 
 if [ ! -f "$PID_FILE" ]; then
