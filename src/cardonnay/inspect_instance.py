@@ -103,6 +103,9 @@ def load_faucet_data(statedir: pl.Path) -> structs.AddressData:
             vkey_file=shelley_dir / "genesis-utxo.vkey",
             skey_file=shelley_dir / "genesis-utxo.skey",
         )
+    else:
+        msg = "Faucet address files not found in the expected locations."
+        raise FileNotFoundError(msg)
 
     return faucet_addrs_data
 
