@@ -19,13 +19,12 @@ LOGGER = logging.getLogger(__name__)
 
 
 class CustomEncoder(json.JSONEncoder):
-    # pyrefly: ignore  # bad-override
-    def default(self, obj: tp.Any) -> tp.Any:  # noqa: ANN401
-        if isinstance(obj, pl.Path):
-            return str(obj)
-        if isinstance(obj, dt.datetime):
-            return obj.isoformat()
-        return super().default(obj)
+    def default(self, o: tp.Any) -> tp.Any:  # noqa: ANN401
+        if isinstance(o, pl.Path):
+            return str(o)
+        if isinstance(o, dt.datetime):
+            return o.isoformat()
+        return super().default(o)
 
 
 def should_use_color() -> bool:

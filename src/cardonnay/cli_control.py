@@ -102,13 +102,13 @@ def print_instances(workdir: pl.Path) -> None:
     for i in running_instances:
         statedir = workdir / f"{ca_utils.STATE_CLUSTER_PREFIX}{i}"
 
+        testnet_info: dict = {}
         with (
             contextlib.suppress(Exception),
             open(statedir / ca_utils.TESTNET_JSON, encoding="utf-8") as fp_in,
         ):
             testnet_info = json.load(fp_in) or {}
 
-        testnet_info = testnet_info if "testnet_info" in locals() else {}
         testnet_name = testnet_info.get("name") or "unknown"
 
         testnet_state = (
