@@ -204,14 +204,19 @@ cardano_cli_log byron genesis genesis \
 
 mv "${STATE_CLUSTER}/byron-params.json" "${STATE_CLUSTER}/byron/params.json"
 
-# We need to use the "legacy" command here. With the "latest" command, Alonzo genesis
-# would have 185 entries for PlutusV2 cost model instead of the expected 175 entries.
-cardano_cli_log legacy genesis create \
+GENESIS_ARGS=( \
   --genesis-dir "${STATE_CLUSTER}/shelley" \
   --testnet-magic "$NETWORK_MAGIC" \
   --gen-genesis-keys "$NUM_BFT_NODES" \
   --start-time "$START_TIME_SHELLEY" \
   --gen-utxo-keys 1
+)
+# We need Alonzo genesis with 175 entries for PlutusV2 cost model.
+# Only in Conway and later, we can have Alonzo genesis with 185 entries.
+if ! cardano_cli_log legacy genesis create --shelley "${GENESIS_ARGS[@]}"; then
+  echo "Never mind the error above, retrying the genesis create with legacy arguments"
+  cardano_cli_log legacy genesis create "${GENESIS_ARGS[@]}"
+fi
 
 jq -r '
   .initialFunds = {}' \
