@@ -325,7 +325,6 @@ for conf in "$SCRIPT_DIR"/config-*.json; do
       | .TargetNumberOfKnownPeers = 100
       | .TargetNumberOfEstablishedPeers = 50
       | .TargetNumberOfActivePeers = 20
-      | .ExperimentalProtocolsEnabled = true
       | .TraceBlockFetchClient = true
       | .TraceChainSyncClient = true' \
       "${STATE_CLUSTER}/${fname}" > "${STATE_CLUSTER}/${fname}_jq"
