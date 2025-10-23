@@ -197,8 +197,14 @@ def cmd_create(  # noqa: PLR0911, C901
                     return 1
                 if instance_num not in delay_instances:
                     break
-        elif instance_num not in avail_instances_gen or instance_num in delay_instances:
+        elif instance_num not in avail_instances_gen:
             LOGGER.error(f"Instance number {instance_num} is already in use.")
+            return 1
+        elif instance_num in delay_instances:
+            LOGGER.error(
+                f"There was a recent attempt to start the instance number {instance_num}. "
+                "Re-try later."
+            )
             return 1
 
         status_file = workdir_pl / f"{ca_utils.DELAY_STATUS}{instance_num}"
