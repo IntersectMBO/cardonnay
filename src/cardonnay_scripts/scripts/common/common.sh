@@ -24,6 +24,7 @@ cardano_cli_log() {
 }
 
 check_spend_success() {
+  local _
   for _ in {1..10}; do
     if ! cardano_cli_log latest query utxo "$@" \
       --testnet-magic "$NETWORK_MAGIC" --output-text | grep -q lovelace; then
@@ -107,23 +108,25 @@ get_sec_to_epoch_end() {
 }
 
 wait_for_era() {
+  local target_era="${1:?"Missing target era"}"
   local era
+  local _
 
   for _ in {1..10}; do
     era="$(get_era)"
-    if [ "$era" = "$1" ]; then
+    if [ "$era" = "$target_era" ]; then
       return
     fi
     sleep 3
   done
 
-  echo "Unexpected era '$era' instead of '$1'" >&2
+  echo "Unexpected era '$era' instead of '$target_era'" >&2
   exit 1
 }
 
 wait_for_epoch() {
   local start_epoch
-  local target_epoch="$1"
+  local target_epoch="${1:?"Missing target epoch"}"
   local epochs_to_go=1
   local sec_to_epoch_end
   local sec_to_sleep
