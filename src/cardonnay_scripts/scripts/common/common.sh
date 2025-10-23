@@ -156,3 +156,22 @@ wait_for_epoch() {
   echo "Unexpected epoch '$curr_epoch' instead of '$target_epoch'" >&2
   exit 1
 }
+
+rm_retry() {
+  # Trying to remove a directory inside /var/tmp on a container may sometimes fail with
+  # "rmdir: directory not empty" error when the directory was created while running
+  # an older container.
+  # This function retries removing the target several times before giving up.
+  local target="${1:?"Missing target to remove"}"
+  local i
+
+  for i in {1..5}; do
+    if [ "$i" -gt 1 ]; then
+      sleep 1
+    fi
+    if rm -rf "$target"; then
+      return 0
+    fi
+  done
+  return 1
+}
