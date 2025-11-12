@@ -1314,7 +1314,7 @@ cardano_cli_log conway governance action create-protocol-parameters-update \
   --deposit-return-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool1/reward.vkey" \
   --anchor-url "http://www.cost-model-update.com" \
   --anchor-data-hash 5d372dca1a4cc90d7d16d966c48270e33e3aa0abcb0e78f0d5ca7ff330d2245d \
-  --cost-model-file "${STATE_CLUSTER}/shelley/cost_models_list_185_v2_v3.json" \
+  --cost-model-file "${STATE_CLUSTER}/shelley/cost_models_list.json" \
   --out-file "${COST_MODEL_ACTION}.action"
 
 STOP_TXIN_AMOUNT="$((FEE + GOV_ACTION_DEPOSIT))"
