@@ -1,6 +1,3 @@
-# Workdir for testnets
-/run_workdir/
-
 # Local files
 /tmp*/
 /.bin*/
@@ -20,6 +17,7 @@ __pycache__/
 
 # Env variables
 /.source*
+!/.source.dev
 
 # Distribution / packaging
 .Python

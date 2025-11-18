@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# An environment setup script for cardonnay local development.
+
+[ -n "${BASH_VERSION:-}" ] || {
+  echo "This script must be sourced from bash." >&2
+  return 1
+}
+
+_ROOT_DIR_CARDONNAY="$(readlink -m "${BASH_SOURCE[0]}/..")"
+
+# Activate virtual environment
+if [ -z "${VIRTUAL_ENV:-}" ] && [ -e "$_ROOT_DIR_CARDONNAY/.venv/bin/activate" ]; then
+  # shellcheck disable=SC2091
+  source "$_ROOT_DIR_CARDONNAY/.venv/bin/activate"
+fi
+
+# Load bash completions for cardonnay
+if ! command -v _cardonnay_completion >/dev/null 2>&1 && command -v cardonnay >/dev/null 2>&1; then
+  source "$_ROOT_DIR_CARDONNAY/completions/cardonnay.bash-completion"
+fi
+
+# Prepend local .bin to PATH.
+# Link `cardano-node` and `cardano-cli` binaries into .bin first.
+if [ -e "$_ROOT_DIR_CARDONNAY/.bin" ] && [[ ":$PATH:" != *":$_ROOT_DIR_CARDONNAY/.bin:"* ]]; then
+  export PATH="$_ROOT_DIR_CARDONNAY/.bin:$PATH"
+fi
+
+unset _ROOT_DIR_CARDONNAY
