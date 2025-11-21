@@ -246,7 +246,7 @@ jq \
   | .maxLovelaceSupply = $max_supply' \
   "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
 rm -f "${STATE_CLUSTER}/create_staked/genesis.json"
-jq '.PlutusV2 |= .[0:175]' \
+jq '.costModels.PlutusV2 |= .[0:175]' \
   "${STATE_CLUSTER}/create_staked/genesis.alonzo.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.json"
 rm -f "${STATE_CLUSTER}/create_staked/genesis.alonzo.json"
 

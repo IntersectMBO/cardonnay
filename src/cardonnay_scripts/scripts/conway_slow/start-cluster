@@ -219,7 +219,7 @@ jq -r '
 cat "${STATE_CLUSTER}/shelley/genesis.json_jq" > "${STATE_CLUSTER}/shelley/genesis.json"
 rm -f "${STATE_CLUSTER}/shelley/genesis.json_jq"
 
-jq '.PlutusV2 |= .[0:175]' \
+jq '.costModels.PlutusV2 |= .[0:175]' \
   < "${STATE_CLUSTER}/shelley/genesis.alonzo.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.json_jq"
 cat "${STATE_CLUSTER}/shelley/genesis.alonzo.json_jq" > "${STATE_CLUSTER}/shelley/genesis.alonzo.json"
 rm -f "${STATE_CLUSTER}/shelley/genesis.alonzo.json_jq"
