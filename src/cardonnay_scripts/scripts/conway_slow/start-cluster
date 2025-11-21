@@ -86,7 +86,7 @@ cp "${SCRIPT_DIR}/dbsync-config.yaml" "$STATE_CLUSTER"
 cp "${SCRIPT_DIR}/submit-api-config.json" "$STATE_CLUSTER"
 cp "${SCRIPT_DIR}/supervisor.conf" "$STATE_CLUSTER"
 cp "$SCRIPT_DIR/testnet.json" "$STATE_CLUSTER"
-cp "$SCRIPT_DIR"/*genesis*.spec.json "${STATE_CLUSTER}/shelley/"start
+cp "$SCRIPT_DIR"/*genesis*.spec.json "${STATE_CLUSTER}/shelley/"
 cp "$SCRIPT_DIR"/cost_models*.json "${STATE_CLUSTER}/shelley/"
 
 if [ -z "${ENABLE_LEGACY:-""}" ]; then
