@@ -202,7 +202,7 @@ def cmd_create(  # noqa: PLR0911, C901
             return 1
         elif instance_num in delay_instances:
             LOGGER.error(
-                f"There was a recent attempt to start the instance number {instance_num}. "
+                f"There was a recent attempt to start/stop the instance number {instance_num}. "
                 "Re-try later."
             )
             return 1
