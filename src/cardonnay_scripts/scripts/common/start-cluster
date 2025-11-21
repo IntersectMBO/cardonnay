@@ -229,7 +229,8 @@ if [ -z "${NO_CC:-""}" ]; then
     --argjson keyHashJson "$KEY_HASH_JSON" \
     '.committee.members = $keyHashJson
     | .committee.threshold = 0.6
-    | .committeeMinSize = 2' \
+    | .committeeMinSize = 2
+    | .plutusV3CostModel |= .[0:251]' \
     "${STATE_CLUSTER}/create_staked/genesis.conway.json" > "${STATE_CLUSTER}/create_staked/genesis.conway.json_jq"
   cat "${STATE_CLUSTER}/create_staked/genesis.conway.json_jq" > "${STATE_CLUSTER}/create_staked/genesis.conway.json"
   rm -f "${STATE_CLUSTER}/create_staked/genesis.conway.json_jq"
@@ -237,6 +238,7 @@ fi
 
 mv "${STATE_CLUSTER}/create_staked/delegate-keys" "${STATE_CLUSTER}/shelley/delegate-keys"
 mv "${STATE_CLUSTER}/create_staked/genesis-keys" "${STATE_CLUSTER}/shelley/genesis-keys"
+
 jq \
   --argjson max_supply "$MAX_SUPPLY" \
   --argjson prot_ver "$PROTOCOL_VERSION" \
@@ -244,6 +246,10 @@ jq \
   | .maxLovelaceSupply = $max_supply' \
   "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
 rm -f "${STATE_CLUSTER}/create_staked/genesis.json"
+jq '.PlutusV2 |= .[0:175]' \
+  "${STATE_CLUSTER}/create_staked/genesis.alonzo.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.json"
+rm -f "${STATE_CLUSTER}/create_staked/genesis.alonzo.json"
+
 mv "$STATE_CLUSTER"/create_staked/genesis*.json "${STATE_CLUSTER}/shelley/"
 
 mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo1.skey" "${STATE_CLUSTER}/shelley/genesis-utxo.skey"
