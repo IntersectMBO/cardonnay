@@ -207,17 +207,20 @@ def cmd_create(  # noqa: PLR0911, C901
             )
             return 1
 
-        status_file = workdir_pl / f"{ca_utils.DELAY_STATUS}{instance_num}"
-        status_file.touch()
+        ca_utils.create_delay_file(instance_num=instance_num, workdir=workdir_abs)
 
     destdir = workdir_pl / f"cluster{instance_num}_{testnet_variant}"
     destdir_abs = destdir.absolute()
+
+    def _undelay() -> None:
+        ca_utils.undelay_instance(instance_num=instance_num, workdir=workdir_abs)
 
     if not keep:
         shutil.rmtree(destdir_abs, ignore_errors=True)
 
     if destdir.exists():
         LOGGER.error(f"Destination directory '{destdir}' already exists.")
+        _undelay()
         return 1
 
     destdir_abs.mkdir(parents=True)
@@ -232,6 +235,7 @@ def cmd_create(  # noqa: PLR0911, C901
         )
     except Exception:
         LOGGER.exception("Failure")
+        _undelay()
         return 1
 
     if comment:
@@ -242,6 +246,7 @@ def cmd_create(  # noqa: PLR0911, C901
 
     LOGGER.debug(f"Testnet files generated to {destdir}")
 
+    run_retval = 0
     if generate_only:
         print(
             f"🚀 {colors.BColors.OKGREEN}You can now start the testnet cluster "
@@ -249,6 +254,7 @@ def cmd_create(  # noqa: PLR0911, C901
         )
         print(f"source {workdir_pl}/.source_cluster{instance_num}")
         print(f"{destdir}/start-cluster")
+        _undelay()
     else:
         run_retval = testnet_start(
             testnetdir=destdir_abs,
@@ -258,7 +264,7 @@ def cmd_create(  # noqa: PLR0911, C901
             testnet_variant=testnet_variant,
             background=background,
         )
-        if run_retval > 0:
-            return run_retval
+        if not background:
+            _undelay()
 
-    return 0
+    return run_retval

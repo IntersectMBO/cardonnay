@@ -197,7 +197,9 @@ def cmd_actions(
         run_retval = testnet_restart_nodes(statedir=statedir, env=env)
     else:
         LOGGER.error("No valid action was selected.")
-        return 1
+        run_retval = 1
+
+    ca_utils.undelay_instance(instance_num=instance_num, workdir=workdir_pl)
 
     return run_retval
 
@@ -215,5 +217,6 @@ def cmd_stopall(workdir: str) -> int:
         env = ca_utils.create_env_vars(workdir=workdir_pl, instance_num=i)
         stop_retval = testnet_stop(statedir=statedir, env=env)
         run_retval = stop_retval if stop_retval != 0 else run_retval
+        ca_utils.undelay_instance(instance_num=i, workdir=workdir_pl)
 
     return run_retval

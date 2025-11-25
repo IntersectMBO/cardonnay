@@ -102,6 +102,12 @@ def get_delay_instances(workdir: pl.Path) -> set[int]:
     return starting
 
 
+def create_delay_file(instance_num: int, workdir: pl.Path) -> None:
+    """Create a delay status file for the specified testnet instance."""
+    status_file = workdir / f"{DELAY_STATUS}{instance_num}"
+    status_file.touch()
+
+
 def delay_instance(instance_num: int, workdir: pl.Path) -> bool:
     """Delay the specified testnet instance to prevent concurrent access."""
     lockfile = str(workdir / DELAY_LOCK)
@@ -110,7 +116,16 @@ def delay_instance(instance_num: int, workdir: pl.Path) -> bool:
         if instance_num in delay_instances:
             LOGGER.error(f"Instance number {instance_num} is already delayed.")
             return False
+        create_delay_file(instance_num=instance_num, workdir=workdir)
+
+    return True
+
+
+def undelay_instance(instance_num: int, workdir: pl.Path) -> bool:
+    """Remove the delay for the specified testnet instance."""
+    lockfile = str(workdir / DELAY_LOCK)
+    with filelock.FileLock(lock_file=lockfile, timeout=2):
         status_file = workdir / f"{DELAY_STATUS}{instance_num}"
-        status_file.touch()
+        status_file.unlink(missing_ok=True)
 
     return True
