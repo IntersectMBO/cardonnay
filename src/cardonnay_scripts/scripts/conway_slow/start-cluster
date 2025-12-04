@@ -37,6 +37,12 @@ PROPOSAL_DELAY=5
 SUBMIT_DELAY=5
 POOL_PLEDGE=1000000000000
 DREP_DELEGATED=500000000000
+PROTOCOL_VERSION=10
+if [ -n "${PV11:-""}" ]; then
+  PROTOCOL_VERSION=11
+elif [ -n "${PV12:-""}" ]; then
+  PROTOCOL_VERSION=12
+fi
 
 FEE=5000000
 
@@ -213,6 +219,12 @@ if ! cardano_cli_log legacy genesis create --shelley "${GENESIS_ARGS[@]}"; then
   cardano_cli_log legacy genesis create "${GENESIS_ARGS[@]}"
 fi
 
+if [ ! -e "${STATE_CLUSTER}/shelley/genesis.dijkstra.json" ] \
+  && [ -e "${STATE_CLUSTER}/shelley/genesis.dijkstra.spec.json" ]; then
+  cp "${STATE_CLUSTER}/shelley/genesis.dijkstra.spec.json" \
+    "${STATE_CLUSTER}/shelley/genesis.dijkstra.json"
+fi
+
 jq -r '
   .initialFunds = {}' \
   < "${STATE_CLUSTER}/shelley/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json_jq"
@@ -273,6 +285,11 @@ ALONZO_GENESIS_HASH="$(cardano_cli_log latest genesis hash --genesis \
   "${STATE_CLUSTER}/shelley/genesis.alonzo.json")"
 CONWAY_GENESIS_HASH="$(cardano_cli_log latest genesis hash --genesis \
   "${STATE_CLUSTER}/shelley/genesis.conway.json")"
+DIJKSTRA_GENESIS_HASH=""
+if [ "$PROTOCOL_VERSION" -ge 11 ]; then
+  DIJKSTRA_GENESIS_HASH="$(cardano_cli_log latest genesis hash --genesis \
+    "${STATE_CLUSTER}/shelley/genesis.dijkstra.json")"
+fi
 
 for conf in "$SCRIPT_DIR"/config-*.json; do
   fname="${conf##*/}"
@@ -284,14 +301,25 @@ for conf in "$SCRIPT_DIR"/config-*.json; do
     --arg shelley_hash "$SHELLEY_GENESIS_HASH" \
     --arg alonzo_hash "$ALONZO_GENESIS_HASH" \
     --arg conway_hash "$CONWAY_GENESIS_HASH" \
+    --arg dijkstra_hash "$DIJKSTRA_GENESIS_HASH" \
     --arg backend "$UTXO_BACKEND" \
     --arg live_tables_path "${LIVE_TABLES_BASE}-${node_name}" \
     '.ByronGenesisHash = $byron_hash
     | .ShelleyGenesisHash = $shelley_hash
     | .AlonzoGenesisHash = $alonzo_hash
     | .ConwayGenesisHash = $conway_hash
+    | if $dijkstra_hash != "" then
+        (.DijkstraGenesisFile = "shelley/genesis.dijkstra.json"
+          | .DijkstraGenesisHash = $dijkstra_hash
+          | .ExperimentalHardForksEnabled = true)
+      else
+        .
+      end
     | if $backend == "mem" then
-        .LedgerDB.Backend = "V2InMemory"
+        (.LedgerDB.Backend = "V2InMemory"
+         | .LedgerDB.NumOfDiskSnapshots = 2
+         | .LedgerDB.QueryBatchSize = 100000
+         | .LedgerDB.SnapshotInterval = 216)
       elif $backend == "disk" then
         (.LedgerDB.Backend = "V1LMDB"
          | .LedgerDB.LiveTablesPath = $live_tables_path)
@@ -999,7 +1027,6 @@ echo "Submitting update proposal to update to PV6"
 
 ALONZO_UPDATE_PROPOSAL_PV6="${STATE_CLUSTER}/shelley/update-proposal-alonzo-pv6"
 
-# protocol version + dapps parameters update
 cardano_cli_log compatible alonzo governance action create-protocol-parameters-update \
   --out-file "${ALONZO_UPDATE_PROPOSAL_PV6}.proposal" \
   --epoch "$(get_epoch)" \
@@ -1053,8 +1080,8 @@ if cardano_cli_log latest query protocol-parameters \
   --testnet-magic "$NETWORK_MAGIC" \
   --out-file "${STATE_CLUSTER}/pparams.json"; then
 
-  PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
-  [ "$PROTOCOL_VERSION" = 6 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+  CUR_PROTVER="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
+  [ "$CUR_PROTVER" = 6 ] || { echo "Unexpected protocol version '$CUR_PROTVER' on line $LINENO" >&2; exit 1; }  # assert
 fi
 
 sleep "$PROPOSAL_DELAY"
@@ -1062,7 +1089,6 @@ echo "Submitting update proposal to update to Babbage"
 
 BABBAGE_UPDATE_PROPOSAL="${STATE_CLUSTER}/shelley/update-proposal-babbage"
 
-# protocol version + dapps parameters update
 cardano_cli_log compatible alonzo governance action create-protocol-parameters-update \
   --out-file "${BABBAGE_UPDATE_PROPOSAL}.proposal" \
   --epoch "$(get_epoch)" \
@@ -1158,8 +1184,8 @@ if cardano_cli_log latest query protocol-parameters \
   --testnet-magic "$NETWORK_MAGIC" \
   --out-file "${STATE_CLUSTER}/pparams.json"; then
 
-  PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
-  [ "$PROTOCOL_VERSION" = 8 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+  CUR_PROTVER="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
+  [ "$CUR_PROTVER" = 8 ] || { echo "Unexpected protocol version '$CUR_PROTVER' on line $LINENO" >&2; exit 1; }  # assert
 fi
 
 # update to Conway
@@ -1216,8 +1242,8 @@ cardano_cli_log latest query protocol-parameters \
   --testnet-magic "$NETWORK_MAGIC" \
   --out-file "${STATE_CLUSTER}/pparams.json"
 
-PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
-[ "$PROTOCOL_VERSION" = 9 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+CUR_PROTVER="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
+[ "$CUR_PROTVER" = 9 ] || { echo "Unexpected protocol version '$CUR_PROTVER' on line $LINENO" >&2; exit 1; }  # assert
 
 # Register CC members, DReps, all in one big transaction:
 
@@ -1548,14 +1574,150 @@ if [ "$PLUTUSV2_COST_MODEL_LEN" != 185 ]; then
 fi
 
 echo "Waiting for Conway PV10 to start"
-wait_for_epoch "$((CONWAY_PV9_EPOCH + 3))"
+CONWAY_PV10_EPOCH="$((CONWAY_PV9_EPOCH + 3))"
+wait_for_epoch "$CONWAY_PV10_EPOCH"
 
 cardano_cli_log conway query protocol-parameters \
   --testnet-magic "$NETWORK_MAGIC" \
   --out-file "${STATE_CLUSTER}/pparams.json"
 
-PROTOCOL_VERSION="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
-[ "$PROTOCOL_VERSION" = 10 ] || { echo "Unexpected protocol version '$PROTOCOL_VERSION' on line $LINENO" >&2; exit 1; }  # assert
+CUR_PROTVER="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
+[ "$CUR_PROTVER" = 10 ] || { echo "Unexpected protocol version '$CUR_PROTVER' on line $LINENO" >&2; exit 1; }  # assert
 
-: > "$START_CLUSTER_STATUS"
+
+if [ "$PROTOCOL_VERSION" -ge 11 ]; then
+  echo "Submitting hard fork proposal to update to Conway PV11"
+
+  PV11_ACTION="${STATE_CLUSTER}/governance_data/hardfork_pv11_action"
+
+  cardano_cli_log conway governance action create-hardfork \
+    --testnet \
+    --governance-action-deposit "$GOV_ACTION_DEPOSIT" \
+    --deposit-return-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool1/reward.vkey" \
+    --prev-governance-action-tx-id "$PV10_ACTION_TXID" \
+    --prev-governance-action-index 0 \
+    --anchor-url "http://www.hardfork-pv11.com" \
+    --anchor-data-hash 5d372dca1a4cc90d7d16d966c48270e33e3aa0abcb0e78f0d5ca7ff330d2245d \
+    --protocol-major-version 11 \
+    --protocol-minor-version 0 \
+    --out-file "${PV11_ACTION}.action"
+
+  STOP_TXIN_AMOUNT="$((FEE + GOV_ACTION_DEPOSIT))"
+
+  get_txins "$FAUCET_ADDR" "$STOP_TXIN_AMOUNT"
+
+  TXOUT_AMOUNT="$((TXIN_AMOUNT - STOP_TXIN_AMOUNT))"
+
+  cardano_cli_log conway transaction build-raw \
+    --fee    "$FEE" \
+    "${TXINS[@]}" \
+    --proposal-file "${PV11_ACTION}.action" \
+    --tx-out "${FAUCET_ADDR}+${TXOUT_AMOUNT}" \
+    --out-file "${PV11_ACTION}-tx.txbody"
+
+  cardano_cli_log conway transaction sign \
+    --signing-key-file "$FAUCET_SKEY" \
+    --testnet-magic    "$NETWORK_MAGIC" \
+    --tx-body-file     "${PV11_ACTION}-tx.txbody" \
+    --out-file         "${PV11_ACTION}-tx.tx"
+
+  cardano_cli_log conway transaction submit \
+    --tx-file "${PV11_ACTION}-tx.tx" \
+    --testnet-magic "$NETWORK_MAGIC"
+
+  sleep "$SUBMIT_DELAY"
+  if ! check_spend_success "${TXINS[@]}"; then
+    echo "Failed to spend Tx inputs, line $LINENO" >&2  # assert
+    exit 1
+  fi
+
+  PV11_ACTION_TXID="$(cardano_cli_log conway transaction txid \
+    --output-text --tx-body-file "${PV11_ACTION}-tx.txbody")"
+
+  echo "Voting on hard fork proposal"
+
+  INDEX=0
+  for f in "$STATE_CLUSTER"/governance_data/cc_member*_committee_hot.vkey; do
+    [ -e "$f" ] || continue
+    INDEX="$((INDEX + 1))"
+    cardano_cli_log conway governance vote create \
+      --yes \
+      --governance-action-tx-id "$PV11_ACTION_TXID" \
+      --governance-action-index 0 \
+      --cc-hot-verification-key-file "$f" \
+      --out-file "${PV11_ACTION}_cc${INDEX}.vote"
+  done
+
+  INDEX=0
+  for f in "$STATE_CLUSTER"/nodes/node-pool*/cold.vkey; do
+    INDEX="$((INDEX + 1))"
+    cardano_cli_log conway governance vote create \
+      --yes \
+      --governance-action-tx-id "$PV11_ACTION_TXID" \
+      --governance-action-index 0 \
+      --cold-verification-key-file "$f" \
+      --out-file "${PV11_ACTION}_spo${INDEX}.vote"
+  done
+
+  # Submit the votes
+
+  PV11_VOTES="${STATE_CLUSTER}/governance_data/hardfork_pv11_votes"
+
+  VOTE_FILES=()
+  for f in "$PV11_ACTION"_*.vote; do
+    VOTE_FILES+=( "--vote-file" "$f" )
+  done
+
+  CC_SIGNING=()
+  for f in "$STATE_CLUSTER"/governance_data/cc_member*_committee_hot.skey; do
+    [ -e "$f" ] || continue
+    CC_SIGNING+=( "--signing-key-file" "$f" )
+  done
+
+  POOL_SIGNING=()
+  for f in "$STATE_CLUSTER"/nodes/node-pool*/cold.skey; do
+    POOL_SIGNING+=( "--signing-key-file" "$f" )
+  done
+
+  get_txins "$FAUCET_ADDR" "$FEE"
+
+  TXOUT_AMOUNT="$((TXIN_AMOUNT - FEE))"
+
+  cardano_cli_log conway transaction build-raw \
+    --fee    "$FEE" \
+    "${TXINS[@]}" \
+    "${VOTE_FILES[@]}" \
+    --tx-out "${FAUCET_ADDR}+${TXOUT_AMOUNT}" \
+    --out-file "${PV11_VOTES}-tx.txbody"
+
+  cardano_cli_log conway transaction sign \
+    --signing-key-file "$FAUCET_SKEY" \
+    "${CC_SIGNING[@]}" \
+    "${POOL_SIGNING[@]}" \
+    --testnet-magic    "$NETWORK_MAGIC" \
+    --tx-body-file     "${PV11_VOTES}-tx.txbody" \
+    --out-file         "${PV11_VOTES}-tx.tx"
+
+  cardano_cli_log conway transaction submit \
+    --tx-file "${PV11_VOTES}-tx.tx" \
+    --testnet-magic "$NETWORK_MAGIC"
+
+  sleep "$SUBMIT_DELAY"
+  if ! check_spend_success "${TXINS[@]}"; then
+    echo "Failed to spend Tx inputs, line $LINENO" >&2  # assert
+    exit 1
+  fi
+
+  echo "Waiting for Conway PV11 to start"
+  wait_for_epoch "$((CONWAY_PV10_EPOCH + 3))"
+
+  cardano_cli_log conway query protocol-parameters \
+    --testnet-magic "$NETWORK_MAGIC" \
+    --out-file "${STATE_CLUSTER}/pparams.json"
+
+  CUR_PROTVER="$(jq ".protocolVersion.major" < "${STATE_CLUSTER}/pparams.json")"
+  [ "$CUR_PROTVER" = 11 ] || { echo "Unexpected protocol version '$CUR_PROTVER' on line $LINENO" >&2; exit 1; }  # assert
+  : > "$START_CLUSTER_STATUS"
+fi
+
 echo "Cluster started 🚀"
