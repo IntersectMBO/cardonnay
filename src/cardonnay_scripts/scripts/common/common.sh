@@ -1,7 +1,26 @@
 #!/usr/bin/env bash
 
+get_epoch_sec() {
+  if [ -z "${EPOCH_SEC:-}" ]; then
+    EPOCH_SEC="$(jq '.epochLength * .slotLength | ceil' < "${STATE_CLUSTER}/shelley/genesis.json")"
+  fi
+  echo "$EPOCH_SEC"
+}
+
+get_slot_length() {
+  if [ -z "${SLOT_LENGTH:-}" ]; then
+    SLOT_LENGTH="$(jq '.slotLength' < "${STATE_CLUSTER}/shelley/genesis.json")"
+  fi
+  echo "$SLOT_LENGTH"
+}
+
 cardano_cli_log() {
   local out retval _
+
+  if [ -z "${START_CLUSTER_LOG:-}" ]; then
+    START_CLUSTER_LOG="${STATE_CLUSTER}/start-cluster.log"
+  fi
+
   echo cardano-cli "$@" >> "$START_CLUSTER_LOG"
 
   for _ in {1..3}; do
@@ -104,7 +123,7 @@ get_era() {
 
 get_sec_to_epoch_end() {
   cardano_cli_log latest query tip --testnet-magic "$NETWORK_MAGIC" |
-    jq -r "$SLOT_LENGTH * .slotsToEpochEnd | ceil"
+    jq -r "$(get_slot_length) * .slotsToEpochEnd | ceil"
 }
 
 wait_for_era() {
@@ -142,7 +161,7 @@ wait_for_epoch() {
   fi
 
   sec_to_epoch_end="$(get_sec_to_epoch_end)"
-  sec_to_sleep="$(( sec_to_epoch_end + ((epochs_to_go - 1) * EPOCH_SEC) ))"
+  sec_to_sleep="$(( sec_to_epoch_end + ((epochs_to_go - 1) * $(get_epoch_sec)) ))"
   sleep "$sec_to_sleep"
 
   for _ in {1..10}; do
@@ -174,4 +193,13 @@ rm_retry() {
     fi
   done
   return 1
+}
+
+save_protocol_params() {
+  local pparams_file="${1:?"Missing protocol parameters output file"}"
+  local era="${2:-latest}"
+
+  cardano_cli_log "$era" query protocol-parameters \
+    --testnet-magic "$NETWORK_MAGIC" \
+    --out-file "$pparams_file"
 }
