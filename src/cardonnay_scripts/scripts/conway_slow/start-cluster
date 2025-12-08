@@ -83,9 +83,6 @@ initialize_globals() {
   fi
   readonly POOL_COST
 
-  ENABLE_SUBMIT_API="$(command -v cardano-submit-api >/dev/null 2>&1 && echo 1 || echo 0)"
-  readonly ENABLE_SUBMIT_API
-
   # shellcheck disable=SC1091
   source "${SCRIPT_DIR}/common.sh"
 
@@ -96,100 +93,6 @@ initialize_globals() {
 
   readonly FUNDS_PER_GENESIS_ADDRESS="$((MAX_SUPPLY / NUM_BFT_NODES))"
   readonly FUNDS_PER_BYRON_ADDRESS="$((FUNDS_PER_GENESIS_ADDRESS * 8 / 10))"
-}
-
-setup_state_cluster() {
-  if ! rm_retry "$STATE_CLUSTER"; then
-    echo "Could not remove existing '$STATE_CLUSTER'" >&2
-    exit 1
-  fi
-  mkdir -p "$STATE_CLUSTER"/{shelley,webserver,db-sync,governance_data}
-  cd "${STATE_CLUSTER}/.."
-
-  cp "$SCRIPT_DIR"/cardano-node-* "$STATE_CLUSTER"
-  cp "${SCRIPT_DIR}/run-cardano-submit-api" "$STATE_CLUSTER"
-  cp "${SCRIPT_DIR}/byron-params.json" "$STATE_CLUSTER"
-  cp "${SCRIPT_DIR}/dbsync-config.yaml" "$STATE_CLUSTER"
-  cp "${SCRIPT_DIR}/submit-api-config.json" "$STATE_CLUSTER"
-  cp "${SCRIPT_DIR}/supervisor.conf" "$STATE_CLUSTER"
-  cp "$SCRIPT_DIR/testnet.json" "$STATE_CLUSTER"
-  cp "$SCRIPT_DIR"/*genesis*.spec.json "${STATE_CLUSTER}/shelley/"
-  cp "$SCRIPT_DIR"/cost_models*.json "${STATE_CLUSTER}/shelley/"
-
-  if [ -z "${ENABLE_LEGACY:-}" ]; then
-    local tconf tfname
-    for tconf in "$SCRIPT_DIR"/p2p-topology-*.json; do
-      [ -e "$tconf" ] || { echo "No p2p topology files found in ${SCRIPT_DIR}, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
-      tfname="${tconf##*/p2p-}"
-      cp "$tconf" "${STATE_CLUSTER}/${tfname}"
-    done
-  else
-    cp "$SCRIPT_DIR"/topology-*.json "$STATE_CLUSTER"
-  fi
-}
-
-configure_supervisor() {
-  cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
-
-[unix_http_server]
-file = ${SUPERVISORD_SOCKET_PATH}
-
-[supervisorctl]
-serverurl = unix:///${SUPERVISORD_SOCKET_PATH}
-EoF
-
-  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ]; then
-    command -v cardano-db-sync > /dev/null 2>&1 || \
-      { echo "The \`cardano-db-sync\` binary not found, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
-
-    if [ -z "${DRY_RUN:-}" ]; then
-      "${SCRIPT_DIR}/postgres-setup.sh"
-    fi
-
-    cp "${SCRIPT_DIR}/run-cardano-dbsync" "$STATE_CLUSTER"
-
-    cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
-
-[program:dbsync]
-command=./${STATE_CLUSTER_NAME}/run-cardano-dbsync
-stderr_logfile=./${STATE_CLUSTER_NAME}/dbsync.stderr
-stdout_logfile=./${STATE_CLUSTER_NAME}/dbsync.stdout
-autostart=false
-autorestart=false
-startsecs=5
-EoF
-  fi
-
-  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ] && [ -n "${SMASH:-}" ]; then
-    command -v cardano-smash-server > /dev/null 2>&1 || \
-      { echo "The \`cardano-smash-server\` binary not found, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
-
-    cp "${SCRIPT_DIR}/run-cardano-smash" "$STATE_CLUSTER"
-
-    cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
-
-[program:smash]
-command=./${STATE_CLUSTER_NAME}/run-cardano-smash
-stderr_logfile=./${STATE_CLUSTER_NAME}/smash.stderr
-stdout_logfile=./${STATE_CLUSTER_NAME}/smash.stdout
-autostart=false
-autorestart=false
-startsecs=5
-EoF
-  fi
-
-  if [ "$ENABLE_SUBMIT_API" -eq 1 ]; then
-    cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
-
-[program:submit_api]
-command=./${STATE_CLUSTER_NAME}/run-cardano-submit-api
-stderr_logfile=./${STATE_CLUSTER_NAME}/submit_api.stderr
-stdout_logfile=./${STATE_CLUSTER_NAME}/submit_api.stdout
-autostart=false
-autorestart=false
-startsecs=5
-EoF
-  fi
 }
 
 create_genesis() {
@@ -250,40 +153,6 @@ create_genesis() {
   rm -f "${STATE_CLUSTER}/shelley/genesis.alonzo.json_jq"
 }
 
-create_committee_keys_in_genesis() {
-  if [ -z "${NO_CC:-}" ]; then
-    local i
-    for i in $(seq 1 "$NUM_CC"); do
-      cardano_cli_log conway governance committee key-gen-cold \
-        --cold-verification-key-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_cold.vkey" \
-        --cold-signing-key-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_cold.skey"
-      cardano_cli_log conway governance committee key-gen-hot \
-        --verification-key-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_hot.vkey" \
-        --signing-key-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_hot.skey"
-      cardano_cli_log conway governance committee create-hot-key-authorization-certificate \
-        --cold-verification-key-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_cold.vkey" \
-        --hot-verification-key-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_hot.vkey" \
-        --out-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_hot_auth.cert"
-      cardano_cli_log conway governance committee key-hash \
-        --verification-key-file "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_cold.vkey" \
-        > "${STATE_CLUSTER}/governance_data/cc_member${i}_committee_cold.hash"
-    done
-
-    local key_hash_json
-    key_hash_json="$(jq -nR '[inputs | {("keyHash-" + .): 10000}] | add' \
-      "$STATE_CLUSTER"/governance_data/cc_member*_committee_cold.hash)"
-    jq \
-      --argjson keyHashJson "$key_hash_json" \
-      '.committee.members = $keyHashJson
-      | .committee.threshold = 0.6
-      | .committeeMinSize = 2
-      | .plutusV3CostModel |= .[0:251]' \
-      "${STATE_CLUSTER}/shelley/genesis.conway.json" > "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
-    cat "${STATE_CLUSTER}/shelley/genesis.conway.json_jq" > "${STATE_CLUSTER}/shelley/genesis.conway.json"
-    rm -f "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
-  fi
-}
-
 get_genesis_data() {
   KEY_DEPOSIT="$(jq '.protocolParams.keyDeposit' \
     < "${STATE_CLUSTER}/shelley/genesis.json")"
@@ -323,7 +192,7 @@ edit_node_configs() {
   local conf fname node_name pool_num
 
   for conf in "$SCRIPT_DIR"/config-*.json; do
-    [ -e "$f" ] || { echo "No config files found in ${SCRIPT_DIR}, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+    [ -e "$conf" ] || { echo "No config files found in ${SCRIPT_DIR}, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
     fname="${conf##*/}"
     node_name="${fname##config-}"
     node_name="${node_name%.json}"
@@ -464,154 +333,124 @@ create_bft_nodes_files() {
 }
 
 _create_pool_node_keys() {
-  local pool_id="$1"
+  local pool_ix="${1:?}"
 
-  mkdir -p "${STATE_CLUSTER}/nodes/node-pool${pool_id}"
-  echo "Generating Pool $pool_id Secrets"
+  mkdir -p "${STATE_CLUSTER}/nodes/node-pool${pool_ix}"
+  echo "Generating Pool $pool_ix Secrets"
 
   cardano_cli_log latest address key-gen \
-    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-utxo.skey" \
-    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-utxo.vkey"
+    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-utxo.skey" \
+    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-utxo.vkey"
   cardano_cli_log latest stake-address key-gen \
-    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.skey" \
-    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey"
+    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.skey" \
+    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey"
   cardano_cli_log latest address build \
-    --payment-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-utxo.vkey" \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
+    --payment-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-utxo.vkey" \
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
     --testnet-magic "$NETWORK_MAGIC" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner.addr"
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner.addr"
   cardano_cli_log latest stake-address build \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
     --testnet-magic "$NETWORK_MAGIC" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.addr"
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.addr"
   cardano_cli_log compatible shelley stake-address registration-certificate \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/stake.reg.shelley.cert"
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/stake.reg.shelley.cert"
   cardano_cli_log conway stake-address registration-certificate \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
     --key-reg-deposit-amt "$KEY_DEPOSIT" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/stake.reg.cert"
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/stake.reg.cert"
 
   cardano_cli_log latest stake-address key-gen \
-    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/reward.skey" \
-    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/reward.vkey"
+    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.skey" \
+    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey"
   cardano_cli_log compatible shelley stake-address registration-certificate \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/reward.vkey" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/stake-reward.reg.shelley.cert"
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey" \
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/stake-reward.reg.shelley.cert"
   cardano_cli_log conway stake-address vote-delegation-certificate \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/reward.vkey" \
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey" \
     --always-abstain \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/stake-reward.vote_deleg.cert"
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/stake-reward.vote_deleg.cert"
   cardano_cli_log conway stake-address registration-and-vote-delegation-certificate \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/reward.vkey" \
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey" \
     --always-abstain \
     --key-reg-deposit-amt "$KEY_DEPOSIT" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/stake-reward.reg.cert"
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/stake-reward.reg.cert"
 
   cardano_cli_log latest node key-gen \
-    --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.vkey" \
-    --cold-signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.skey" \
-    --operational-certificate-issue-counter-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.counter"
+    --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
+    --cold-signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.skey" \
+    --operational-certificate-issue-counter-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.counter"
   cardano_cli_log latest node key-gen-KES \
-    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/kes.vkey" \
-    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/kes.skey"
+    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/kes.vkey" \
+    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/kes.skey"
   cardano_cli_log latest node key-gen-VRF \
-    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/vrf.vkey" \
-    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/vrf.skey"
+    --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey" \
+    --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.skey"
 
   cardano_cli_log compatible shelley stake-address stake-delegation-certificate \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
-    --cold-verification-key-file  "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.vkey" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.deleg.shelley.cert"
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
+    --cold-verification-key-file  "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.deleg.shelley.cert"
   cardano_cli_log conway stake-address stake-delegation-certificate \
-    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
-    --cold-verification-key-file  "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.vkey" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.deleg.cert"
+    --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
+    --cold-verification-key-file  "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.deleg.cert"
 
   cardano_cli_log latest node issue-op-cert \
     --kes-period 0 \
-    --cold-signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.skey" \
-    --kes-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/kes.vkey" \
-    --operational-certificate-issue-counter-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.counter" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/op.cert"
-}
-
-_create_pool_metadata() {
-  local pool_id="$1"
-  local pool_name="TestPool${pool_id}"
-  local pool_desc="Test Pool $pool_id"
-  local pool_ticker="TP${pool_id}"
-
-  cat > "${STATE_CLUSTER}/webserver/pool${pool_id}.html" <<EoF
-<!DOCTYPE html>
-<html>
-<head>
-<title>${pool_name}</title>
-</head>
-<body>
-name: <strong>${pool_name}</strong><br>
-description: <strong>${pool_desc}</strong><br>
-ticker: <strong>${pool_ticker}</strong><br>
-</body>
-</html>
-EoF
-
-  echo "Generating Pool $pool_id Metadata"
-  jq -n \
-    --arg name "$pool_name" \
-    --arg description "$pool_desc" \
-    --arg ticker "$pool_ticker" \
-    --arg homepage "http://localhost:${WEBSERVER_PORT}/pool${pool_id}.html" \
-    '{"name": $name, "description": $description, "ticker": $ticker, "homepage": $homepage}' \
-    > "${STATE_CLUSTER}/webserver/pool${pool_id}.json"
+    --cold-signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.skey" \
+    --kes-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/kes.vkey" \
+    --operational-certificate-issue-counter-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.counter" \
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/op.cert"
 }
 
 _create_pool_registration() {
-  local pool_id="$1"
-  local metadata_url="http://localhost:${WEBSERVER_PORT}/pool${pool_id}.json"
+  local pool_ix="${1:?}"
+  local metadata_url="http://localhost:${WEBSERVER_PORT}/pool${pool_ix}.json"
   local metadata_hash pool_port
 
   metadata_hash="$(cardano_cli_log latest stake-pool metadata-hash --pool-metadata-file \
-    "${STATE_CLUSTER}/webserver/pool${pool_id}.json")"
-  pool_port="$((NODE_PORT_BASE + (NUM_BFT_NODES + pool_id - 1) * PORTS_PER_NODE))"
-  echo "$pool_port" > "${STATE_CLUSTER}/nodes/node-pool${pool_id}/port"
-  echo "$POOL_PLEDGE" > "${STATE_CLUSTER}/nodes/node-pool${pool_id}/pledge"
+    "${STATE_CLUSTER}/webserver/pool${pool_ix}.json")"
+  pool_port="$((NODE_PORT_BASE + (NUM_BFT_NODES + pool_ix - 1) * PORTS_PER_NODE))"
+  echo "$pool_port" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/port"
+  echo "$POOL_PLEDGE" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/pledge"
 
   cardano_cli_log compatible shelley stake-pool registration-certificate \
-    --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.vkey" \
-    --vrf-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/vrf.vkey" \
+    --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
+    --vrf-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey" \
     --pool-pledge "$POOL_PLEDGE" \
     --pool-margin 0.35 \
     --pool-cost "$POOL_COST" \
-    --pool-reward-account-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/reward.vkey" \
-    --pool-owner-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
+    --pool-reward-account-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey" \
+    --pool-owner-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
     --metadata-url "$metadata_url" \
     --metadata-hash "$metadata_hash" \
     --pool-relay-port "$pool_port" \
     --pool-relay-ipv4 "127.0.0.1" \
     --testnet-magic "$NETWORK_MAGIC" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/register.shelley.cert"
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/register.shelley.cert"
   cardano_cli_log conway stake-pool registration-certificate \
-    --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/cold.vkey" \
-    --vrf-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/vrf.vkey" \
+    --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
+    --vrf-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey" \
     --pool-pledge "$POOL_PLEDGE" \
     --pool-margin 0.35 \
     --pool-cost "$POOL_COST" \
-    --pool-reward-account-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/reward.vkey" \
-    --pool-owner-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/owner-stake.vkey" \
+    --pool-reward-account-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey" \
+    --pool-owner-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
     --metadata-url "$metadata_url" \
     --metadata-hash "$metadata_hash" \
     --pool-relay-port "$pool_port" \
     --pool-relay-ipv4 "127.0.0.1" \
     --testnet-magic "$NETWORK_MAGIC" \
-    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_id}/register.cert"
+    --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/register.cert"
 }
 
 create_pools_files() {
   local i
   for i in $(seq 1 "$NUM_POOLS"); do
     _create_pool_node_keys "$i"
-    _create_pool_metadata "$i"
+    create_pool_metadata "$i"
     _create_pool_registration "$i"
   done
 
@@ -620,125 +459,10 @@ create_pools_files() {
   rmdir "${STATE_CLUSTER}/shelley/utxo-keys"
 }
 
-create_dreps_files() {
-  local i
-  for i in $(seq 1 "$NUM_DREPS"); do
-    cardano_cli_log conway governance drep key-gen \
-      --signing-key-file "${STATE_CLUSTER}/governance_data/default_drep_${i}_drep.skey" \
-      --verification-key-file "${STATE_CLUSTER}/governance_data/default_drep_${i}_drep.vkey"
-
-    cardano_cli_log conway governance drep registration-certificate \
-      --drep-verification-key-file "${STATE_CLUSTER}/governance_data/default_drep_${i}_drep.vkey" \
-      --key-reg-deposit-amt "$DREP_DEPOSIT" \
-      --out-file "${STATE_CLUSTER}/governance_data/default_drep_${i}_drep_reg.cert"
-
-    cardano_cli_log conway address key-gen \
-      --signing-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}.skey" \
-      --verification-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}.vkey"
-
-    cardano_cli_log conway stake-address key-gen \
-      --signing-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.skey" \
-      --verification-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.vkey"
-
-    cardano_cli_log conway address build \
-      --payment-verification-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}.vkey" \
-      --stake-verification-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.vkey" \
-      --testnet-magic "$NETWORK_MAGIC" \
-      --out-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}.addr"
-
-    cardano_cli_log conway stake-address build \
-      --stake-verification-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.vkey" \
-      --testnet-magic "$NETWORK_MAGIC" \
-      --out-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.addr"
-
-    cardano_cli_log conway stake-address registration-certificate \
-      --stake-verification-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.vkey" \
-      --key-reg-deposit-amt "$KEY_DEPOSIT" \
-      --out-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.reg.cert"
-
-    cardano_cli_log conway stake-address vote-delegation-certificate \
-      --stake-verification-key-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.vkey" \
-      --drep-verification-key-file "${STATE_CLUSTER}/governance_data/default_drep_${i}_drep.vkey" \
-      --out-file "${STATE_CLUSTER}/governance_data/vote_stake_addr${i}_stake.vote_deleg.cert"
-  done
-}
-
-create_cluster_scripts() {
-  printf "#!/bin/sh\n\nsupervisorctl -s unix:///%s start all" "$SUPERVISORD_SOCKET_PATH" > "${STATE_CLUSTER}/supervisorctl_start"
-  printf "#!/bin/sh\n\nsupervisorctl -s unix:///%s restart nodes:" "$SUPERVISORD_SOCKET_PATH" > "${STATE_CLUSTER}/supervisorctl_restart_nodes"
-  printf "#!/bin/sh\n\nsupervisorctl -s unix:///%s \"\$@\"" "$SUPERVISORD_SOCKET_PATH" > "${STATE_CLUSTER}/supervisorctl"
-
-  cat > "${STATE_CLUSTER}/supervisord_start" <<'EoF'
-#!/usr/bin/env bash
-
-set -uo pipefail
-
-SCRIPT_DIR="$(readlink -m "${0%/*}")"
-
-cd "${SCRIPT_DIR}/.."
-
-supervisord --config "${SCRIPT_DIR}/supervisor.conf"
-EoF
-
-  cat > "${STATE_CLUSTER}/stop-cluster" <<EoF
-#!/usr/bin/env bash
-
-set -uo pipefail
-
-SCRIPT_DIR="\$(readlink -m "\${0%/*}")"
-PID_FILE="\${SCRIPT_DIR}/supervisord.pid"
-SUPERVISORD_SOCKET_PATH="${SUPERVISORD_SOCKET_PATH}"
-
-if [ -e "\$SUPERVISORD_SOCKET_PATH" ]; then
-  supervisorctl -s unix:///\${SUPERVISORD_SOCKET_PATH} stop all || rm -f "\$SUPERVISORD_SOCKET_PATH"
-fi
-
-if [ ! -f "\$PID_FILE" ]; then
-  echo "Cluster is not running!"
-  exit 0
-fi
-
-PID="\$(<"\$PID_FILE")"
-for _ in {1..5}; do
-  if ! kill "\$PID"; then
-    break
-  fi
-  sleep 1
-  if [ ! -f "\$PID_FILE" ]; then
-    break
-  fi
-done
-
-rm -f "\$PID_FILE"
-echo "Cluster terminated!"
-EoF
-
-  chmod u+x "$STATE_CLUSTER"/{supervisorctl*,supervisord_*,stop-cluster}
-}
-
-start_cluster_nodes() {
-  if [ -n "${DRY_RUN:-}" ]; then
-    echo "Dry run, not starting cluster"
-    exit 0
-  fi
-
-  supervisord --config "${STATE_CLUSTER}/supervisor.conf"
-
-  local _
-  for _ in {1..5}; do
-    if [ -S "$CARDANO_NODE_SOCKET_PATH" ]; then
-      break
-    fi
-    echo "Waiting 5 seconds for the nodes to start"
-    sleep 5
-  done
-  [ -S "$CARDANO_NODE_SOCKET_PATH" ] || { echo "Failed to start the nodes, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
-}
-
 create_byron_update_proposal() {
-  local proposal_file="$1"
-  local protocol_major="$2"
-  local protocol_minor="$3"
+  local proposal_file="${1:?Proposal file argument is required}"
+  local protocol_major="${2:?Protocol major version argument is required}"
+  local protocol_minor="${3:?Protocol minor version argument is required}"
 
   cardano_cli_log byron governance create-update-proposal \
     --filepath "$proposal_file" \
@@ -754,8 +478,8 @@ create_byron_update_proposal() {
 }
 
 submit_byron_proposal_with_votes() {
-  local proposal_file="$1"
-  local vote_base="$2"
+  local proposal_file="${1:?Proposal file argument is required}"
+  local vote_base="${2:?Vote base argument is required}"
   local i
 
   cardano_cli_log byron governance submit-update-proposal \
@@ -807,22 +531,10 @@ get_shelley_env() {
   readonly FAUCET_SKEY="${STATE_CLUSTER}/byron/payment-keys.000-converted.skey"
 }
 
-start_optional_services() {
-  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ]; then
-    echo "Starting db-sync"
-    supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start dbsync
-  fi
-
-  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ] && [ -n "${SMASH:-}" ]; then
-    echo "Starting smash"
-    supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start smash
-  fi
-}
-
 create_legacy_update_proposal() {
-  local era="$1"
-  local proposal_file="$2"
-  local major_version="$3"
+  local era="${1:?}"
+  local proposal_file="${2:?}"
+  local major_version="${3:?}"
   shift 3
 
   cardano_cli_log compatible "$era" governance action create-protocol-parameters-update \
@@ -835,9 +547,9 @@ create_legacy_update_proposal() {
 }
 
 submit_legacy_update_proposal() {
-  local era="$1"
-  local proposal_file="$2"
-  local tx_base="$3"
+  local era="${1:?}"
+  local proposal_file="${2:?}"
+  local tx_base="${3:?}"
 
   get_txins "$FAUCET_ADDR" "$FEE"
 
@@ -865,10 +577,10 @@ submit_legacy_update_proposal() {
 }
 
 do_legacy_hf() {
-  local from_era="$1"
-  local to_era="$2"
-  local major_version="$3"
-  local wait_epoch="$4"
+  local from_era="${1:?}"
+  local to_era="${2:?}"
+  local major_version="${3:?}"
+  local wait_epoch="${4:?}"
   shift 4
 
   local proposal_file="${STATE_CLUSTER}/shelley/update-proposal-${to_era,,}.proposal"
@@ -972,7 +684,7 @@ _register_governance_in_conway() {
 }
 
 submit_gov_action() {
-  local action_base="$1"
+  local action_base="${1:?}"
   local stop_txin_amount="$((FEE + GOV_ACTION_DEPOSIT))"
 
   get_txins "$FAUCET_ADDR" "$stop_txin_amount"
@@ -1004,7 +716,7 @@ submit_gov_action() {
 }
 
 create_and_submit_hf_action() {
-  local hf_action="$1"
+  local hf_action="${1:?}"
   local era="$2"
   local major_version="$3"
   local prev_txid="${4:-}"
@@ -1056,7 +768,7 @@ _update_cost_model_in_pv9() {
 }
 
 _wait_pv9_cost_model_enacted() {
-  local vote_epoch="$1"
+  local vote_epoch="${1:?}"
 
   echo "Waiting for cost model update to get enacted"
   wait_for_epoch "$((vote_epoch + 2))"
@@ -1071,8 +783,8 @@ _wait_pv9_cost_model_enacted() {
 }
 
 vote_on_action() {
-  local action_txid="$1"
-  local action_base="$2"
+  local action_txid="${1:?}"
+  local action_base="${2:?}"
   local with_spos="${3:-no}"
   local with_dreps="${4:-no}"
   local f
@@ -1121,8 +833,8 @@ vote_on_action() {
 }
 
 submit_votes() {
-  local votes_base="$1"
-  local action_base="$2"
+  local votes_base="${1:?}"
+  local action_base="${2:?}"
   local f
 
   local -a vote_files=()
@@ -1235,7 +947,7 @@ hf_to_shelley() {
 }
 
 hf_to_allegra() {
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
 
   sleep "$PROPOSAL_DELAY"
   echo "Submitting update proposal to transfer to Allegra, transferring funds to pool owners, registering pools and delegations"
@@ -1305,7 +1017,7 @@ hf_to_allegra() {
 }
 
 hf_to_mary() {
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
   do_legacy_hf "allegra" "Mary" 4 "$((cur_epoch + 1))" --decentralization-parameter 0
   wait_for_era "Mary"
 }
@@ -1316,7 +1028,7 @@ hf_to_alonzo() {
     return
   fi
 
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
   do_legacy_hf "mary" "Alonzo" 5 "$((cur_epoch + 1))"
   wait_for_era "Alonzo"
 }
@@ -1327,7 +1039,7 @@ hf_to_alonzo_pv6() {
     return
   fi
 
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
 
   do_legacy_hf "alonzo" "Alonzo-PV6" 6 "$((cur_epoch + 1))"
 
@@ -1344,12 +1056,7 @@ hf_to_babbage() {
     return
   fi
 
-  local cur_epoch="$1"
-
-  if [ "$ENABLE_SUBMIT_API" -eq 1 ]; then
-    echo "Starting cardano-submit-api"
-    supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start submit_api
-  fi
+  local cur_epoch="${1:?}"
 
   do_legacy_hf "alonzo" "Babbage" 7 "$((cur_epoch + 1))"
   wait_for_era "Babbage"
@@ -1361,7 +1068,7 @@ hf_to_babbage_pv8() {
     return
   fi
 
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
 
   do_legacy_hf "babbage" "Babbage-PV8" 8 "$((cur_epoch + 1))"
 
@@ -1378,7 +1085,7 @@ hf_to_conway() {
     return
   fi
 
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
 
   do_legacy_hf "babbage" "Conway" 9 "$((cur_epoch + 1))"
   wait_for_era "Conway"
@@ -1392,7 +1099,7 @@ hf_to_conway() {
 }
 
 hf_to_conway_pv10() {
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
 
   _update_cost_model_in_pv9
 
@@ -1434,7 +1141,7 @@ hf_to_conway_pv11() {
     return
   fi
 
-  local cur_epoch="$1"
+  local cur_epoch="${1:?}"
 
   echo "Submitting hard fork proposal to update to Conway PV11"
 
@@ -1461,7 +1168,7 @@ hf_to_conway_pv11() {
 
 main() {
   initialize_globals
-  setup_state_cluster
+  setup_state_cluster "${STATE_CLUSTER}/shelley"
   configure_supervisor
   create_genesis
   create_committee_keys_in_genesis
