@@ -56,7 +56,7 @@ initialize_globals() {
   fi
 
   case "${UTXO_BACKEND:=""}" in
-    "" | mem | disk)
+    "" | mem | disk | disklmdb)
       ;;
     *)
       echo "Unknown \`UTXO_BACKEND\`: '$UTXO_BACKEND', line $LINENO in ${BASH_SOURCE[0]}" >&2
@@ -223,12 +223,13 @@ edit_node_configs() {
       | ."LastKnownBlockVersion-Major" = $prot_ver
       | if $backend == "mem" then
           (.LedgerDB.Backend = "V2InMemory"
-           | .LedgerDB.NumOfDiskSnapshots = 2
-           | .LedgerDB.QueryBatchSize = 100000
            | .LedgerDB.SnapshotInterval = 216)
         elif $backend == "disk" then
+          .LedgerDB.Backend = "V2LSM"
+        elif $backend == "disklmdb" then
           (.LedgerDB.Backend = "V1LMDB"
-           | .LedgerDB.LiveTablesPath = $live_tables_path)
+           | .LedgerDB.LiveTablesPath = $live_tables_path
+           | .LedgerDB.SnapshotInterval = 300)
         elif has("LedgerDB") then
           .LedgerDB |= del(.Backend)
         else
