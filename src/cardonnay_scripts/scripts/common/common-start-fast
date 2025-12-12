@@ -56,7 +56,7 @@ initialize_globals() {
   fi
 
   case "${UTXO_BACKEND:=""}" in
-    "" | mem | disk | disklmdb)
+    "" | mem | disk | disklmdb | empty)
       ;;
     *)
       echo "Unknown \`UTXO_BACKEND\`: '$UTXO_BACKEND', line $LINENO in ${BASH_SOURCE[0]}" >&2
@@ -64,6 +64,21 @@ initialize_globals() {
       ;;
   esac
   readonly UTXO_BACKEND
+
+  local backend
+  UTXO_BACKENDS=()
+  for backend in ${MIXED_UTXO_BACKENDS:=""}; do
+    case "$backend" in
+      mem | disk | disklmdb | empty)
+        UTXO_BACKENDS+=("$backend")
+        ;;
+      *)
+        echo "Unknown \`MIXED_UTXO_BACKENDS\` entry: '$backend', line $LINENO in ${BASH_SOURCE[0]}" >&2
+        exit 1
+        ;;
+    esac
+  done
+  readonly UTXO_BACKENDS
 
   SECURITY_PARAM="$(jq '.securityParam' < "${SCRIPT_DIR}/genesis.spec.json")"
   readonly SECURITY_PARAM
@@ -187,13 +202,30 @@ get_genesis_data() {
 
 edit_node_configs() {
   local live_tables_base="${STATE_CLUSTER_NAME}/lmdb"
-  local conf fname node_name pool_num
+  local conf fname node_name pool_num utxo_backend
 
   for conf in "$SCRIPT_DIR"/config-*.json; do
     [ -e "$conf" ] || { echo "No config files found in ${SCRIPT_DIR}, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
     fname="${conf##*/}"
     node_name="${fname##config-}"
     node_name="${node_name%.json}"
+
+    if [ "$fname" = "config-bft1.json" ]; then
+      pool_num=""
+    else
+      pool_num="${fname##*-pool}"
+      pool_num="${pool_num%.json}"
+    fi
+
+    utxo_backend="${UTXO_BACKEND}"
+    # Rotate through the mixed backends for block producing nodes, if set.
+    if [ -n "$pool_num" ] && [ "${#UTXO_BACKENDS[@]}" -gt 0 ]; then
+      index=$(( (pool_num - 1) % ${#UTXO_BACKENDS[@]} ))
+      utxo_backend="${UTXO_BACKENDS[$index]}"
+    fi
+    if [ "$utxo_backend" = "empty" ]; then
+      utxo_backend=""
+    fi
 
     jq \
       --arg byron_hash "$BYRON_GENESIS_HASH" \
@@ -202,7 +234,7 @@ edit_node_configs() {
       --arg conway_hash "$CONWAY_GENESIS_HASH" \
       --arg dijkstra_hash "$DIJKSTRA_GENESIS_HASH" \
       --argjson prot_ver "$PROTOCOL_VERSION" \
-      --arg backend "$UTXO_BACKEND" \
+      --arg backend "$utxo_backend" \
       --arg live_tables_path "${live_tables_base}-${node_name}" \
       '.ByronGenesisHash = $byron_hash
       | .ShelleyGenesisHash = $shelley_hash
@@ -241,13 +273,11 @@ edit_node_configs() {
     if [ -z "${ENABLE_LEGACY:-}" ]; then
 
       if [ -n "${MIXED_P2P:-}" ]; then
-        if [ "$fname" = "config-bft1.json" ]; then
+        if [ -z "$pool_num" ]; then
           cp -f "$SCRIPT_DIR"/topology-bft1.json "$STATE_CLUSTER"
           continue
         fi
 
-        pool_num="${fname##*-pool}"
-        pool_num="${pool_num%.json}"
         if [ "$((pool_num % 2))" != 0 ]; then
           cp -f "${SCRIPT_DIR}/topology-pool${pool_num}.json" "$STATE_CLUSTER"
           continue
