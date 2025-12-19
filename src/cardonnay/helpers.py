@@ -5,6 +5,7 @@ import os
 import pathlib as pl
 import subprocess
 import sys
+import threading
 import time
 import typing as tp
 
@@ -65,13 +66,22 @@ def print_json(data: dict | list | pydantic.BaseModel) -> None:
     print_json_str(data=json_str)
 
 
+def _stream(pipe: tp.TextIO, target: tp.TextIO) -> None:
+    try:
+        for line in pipe:
+            target.write(line)
+            target.flush()
+    finally:
+        pipe.close()
+
+
 def run_command(
     command: str | list,
     workdir: ttypes.FileType = "",
     ignore_fail: bool = False,
     shell: bool = False,
 ) -> int:
-    """Run command and stream output live."""
+    """Run command and stream output to stdout/stderr."""
     if isinstance(command, str):
         cmd = command if shell else command.split()
         cmd_str = command
@@ -86,22 +96,25 @@ def run_command(
         cwd=workdir or None,
         shell=shell,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
         text=True,
-        bufsize=1,  # Line-buffered
+        bufsize=1,
     )
 
-    if p.stdout is not None:
-        for line in p.stdout:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-        p.stdout.close()  # Properly close the stream
-    else:
-        p.wait()  # Still wait if no stdout
-        if not ignore_fail and p.returncode != 0:
-            err = f"An error occurred while running `{cmd_str}` (no output captured)"
-            raise RuntimeError(err)
-        return p.returncode
+    threads = []
+
+    if p.stdout:
+        t_out = threading.Thread(target=_stream, args=(p.stdout, sys.stdout), daemon=True)
+        threads.append(t_out)
+        t_out.start()
+
+    if p.stderr:
+        t_err = threading.Thread(target=_stream, args=(p.stderr, sys.stderr), daemon=True)
+        threads.append(t_err)
+        t_err.start()
+
+    for t_ in threads:
+        t_.join()
 
     p.wait()
 
