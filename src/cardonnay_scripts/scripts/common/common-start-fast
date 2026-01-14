@@ -410,14 +410,14 @@ register_entities_in_conway() {
 
   echo "Re-registering pools, creating CC members and DReps"
 
-  local genesis_signing=()
+  local -a genesis_signing=()
   local skey
   for skey in "$STATE_CLUSTER"/shelley/genesis-keys/genesis?.skey; do
     [ -e "$skey" ] || { echo "No genesis signing keys found in ${STATE_CLUSTER}/shelley/genesis-keys, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
     genesis_signing+=("--signing-key-file" "$skey")
   done
 
-  local delegate_signing=()
+  local -a delegate_signing=()
   for skey in "$STATE_CLUSTER"/shelley/delegate-keys/delegate?.skey; do
     [ -e "$skey" ] || { echo "No delegate signing keys found in ${STATE_CLUSTER}/shelley/delegate-keys, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
     delegate_signing+=("--signing-key-file" "$skey")
@@ -436,8 +436,8 @@ register_entities_in_conway() {
 
   get_txins "$txin_addr" "$stop_txin_amount"
 
-  local pool_args=()
-  local pool_signing=()
+  local -a pool_args=()
+  local -a pool_signing=()
   local i
   for i in $(seq 1 "$NUM_POOLS"); do
     pool_args+=( \
@@ -454,21 +454,21 @@ register_entities_in_conway() {
     )
   done
 
-  local cc_args=()
+  local -a cc_args=()
   local f
   for f in "$STATE_CLUSTER"/governance_data/cc_member*_committee_hot_auth.cert; do
     [ -e "$f" ] || continue
     cc_args+=( "--certificate-file" "$f" )
   done
 
-  local cc_signing=()
+  local -a cc_signing=()
   for f in "$STATE_CLUSTER"/governance_data/cc_member*_committee_cold.skey; do
     [ -e "$f" ] || continue
     cc_signing+=( "--signing-key-file" "$f" )
   done
 
-  local dreps_args=()
-  local dreps_signing=()
+  local -a dreps_args=()
+  local -a dreps_signing=()
   for i in $(seq 1 "$NUM_DREPS"); do
     dreps_args+=( \
       "--tx-out" "$(<"${STATE_CLUSTER}/governance_data/vote_stake_addr${i}.addr")+${DREP_DELEGATED}" \
