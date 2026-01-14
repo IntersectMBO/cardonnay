@@ -749,8 +749,8 @@ submit_gov_action() {
 
 create_and_submit_hf_action() {
   local hf_action="${1:?}"
-  local era="$2"
-  local major_version="$3"
+  local era="${2:?}"
+  local major_version="${3:?}"
   local prev_txid="${4:-}"
   local prev_index="${5:-0}"
 
