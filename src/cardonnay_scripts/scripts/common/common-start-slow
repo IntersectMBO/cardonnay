@@ -195,7 +195,7 @@ get_genesis_data() {
     "${STATE_CLUSTER}/shelley/genesis.conway.json")"
   readonly CONWAY_GENESIS_HASH
   DIJKSTRA_GENESIS_HASH=""
-  if [ "$PROTOCOL_VERSION" -ge 11 ]; then
+  if [ "$PROTOCOL_VERSION" -ge 11 ] || is_truthy "${ENABLE_EXPERIMENTAL:-}"; then
     DIJKSTRA_GENESIS_HASH="$(cardano_cli_log latest genesis hash --genesis \
       "${STATE_CLUSTER}/shelley/genesis.dijkstra.json")"
   fi

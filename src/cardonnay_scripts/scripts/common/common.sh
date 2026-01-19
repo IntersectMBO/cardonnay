@@ -505,3 +505,15 @@ create_committee_keys_in_genesis() {
   cat "${STATE_CLUSTER}/shelley/genesis.conway.json_jq" > "${STATE_CLUSTER}/shelley/genesis.conway.json"
   rm -f "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
 }
+
+is_truthy() {
+  local val="${1:?"Missing value to check"}"
+  case "$val" in
+    1 | true | TRUE | yes | YES | on | ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
