@@ -145,7 +145,7 @@ def run_detached_command(
             cmd,
             cwd=pl.Path(workdir) if workdir else None,
             stdout=logout,
-            stderr=logout,
+            stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             close_fds=True,
             start_new_session=True,

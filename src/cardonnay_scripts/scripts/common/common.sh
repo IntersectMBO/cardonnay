@@ -29,31 +29,13 @@ get_slot_length() {
 }
 
 cardano_cli_log() {
-  local stderr retval _
-
   if [ -z "${START_CLUSTER_LOG:-}" ]; then
     START_CLUSTER_LOG="${STATE_CLUSTER}/start-cluster.log"
   fi
 
   echo cardano-cli "$@" >> "$START_CLUSTER_LOG"
-
-  for _ in {1..3}; do
-    retval=0
-    # Capture stderr while also outputting both stdout and stderr to their original destinations
-    { stderr="$(cardano-cli "$@" 2> >(tee /dev/stderr) 1>&3)"; } 3>&1 || retval="$?"
-
-    case "$stderr" in
-      *"resource vanished"*)
-        printf "Retrying \`cardano-cli %s\`. Failure:\n%s\n" "$*" "$stderr" >&2
-        sleep 1
-        ;;
-      *)
-        break
-        ;;
-    esac
-  done
-
-  return "$retval"
+  cardano-cli "$@"
+  return "$?"
 }
 
 check_spend_success() {
