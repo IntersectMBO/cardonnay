@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 
+is_truthy() {
+  local val="${1:-}"
+  val=${val,,}
+
+  case "$val" in
+    1 | true | yes | on | enabled )
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 get_epoch_sec() {
   if [ -z "${EPOCH_SEC:-}" ]; then
     EPOCH_SEC="$(jq '.epochLength * .slotLength | ceil' < "${STATE_CLUSTER}/shelley/genesis.json")"
@@ -221,7 +235,7 @@ EoF
     command -v cardano-db-sync > /dev/null 2>&1 || \
       { echo "The \`cardano-db-sync\` binary not found, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 
-    if [ -z "${DRY_RUN:-}" ]; then
+    if ! is_truthy "${DRY_RUN:-}"; then
       "${SCRIPT_DIR:?}/postgres-setup.sh"
     fi
 
@@ -239,7 +253,7 @@ startsecs=5
 EoF
   fi
 
-  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ] && [ -n "${SMASH:-}" ]; then
+  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ] && is_truthy "${SMASH:-}"; then
     command -v cardano-smash-server > /dev/null 2>&1 || \
       { echo "The \`cardano-smash-server\` binary not found, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 
@@ -325,7 +339,7 @@ EoF
 }
 
 start_cluster_nodes() {
-  if [ -n "${DRY_RUN:-}" ]; then
+  if is_truthy "${DRY_RUN:-}"; then
     echo "Dry run, not starting cluster"
     exit 0
   fi
@@ -415,7 +429,7 @@ setup_state_cluster() {
   cp "$SCRIPT_DIR"/*genesis*.spec.json "$genesis_init_dir"
   cp "$SCRIPT_DIR"/cost_models*.json "$genesis_init_dir" 2>/dev/null || true
 
-  if [ -z "${ENABLE_LEGACY:-}" ]; then
+  if ! is_truthy "${ENABLE_LEGACY:-}"; then
     local tconf tfname
     for tconf in "$SCRIPT_DIR"/p2p-topology-*.json; do
       [ -e "$tconf" ] || { echo "No p2p topology files found in ${SCRIPT_DIR}, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
@@ -471,7 +485,7 @@ create_dreps_files() {
 }
 
 create_committee_keys_in_genesis() {
-  if [ -n "${NO_CC:-}" ]; then
+  if is_truthy "${NO_CC:-}"; then
     return
   fi
 
@@ -504,16 +518,4 @@ create_committee_keys_in_genesis() {
     "${STATE_CLUSTER}/shelley/genesis.conway.json" > "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
   cat "${STATE_CLUSTER}/shelley/genesis.conway.json_jq" > "${STATE_CLUSTER}/shelley/genesis.conway.json"
   rm -f "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
-}
-
-is_truthy() {
-  local val="${1:?"Missing value to check"}"
-  case "$val" in
-    1 | true | TRUE | yes | YES | on | ON)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
 }

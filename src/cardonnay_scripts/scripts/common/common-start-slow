@@ -267,8 +267,8 @@ edit_node_configs() {
       | if (.LedgerDB? // {}) == {} then del(.LedgerDB) else . end
       ' "$conf" > "${STATE_CLUSTER}/${fname}"
 
-    if [ -z "${ENABLE_LEGACY:-}" ]; then
-      if [ -n "${MIXED_P2P:-}" ]; then
+    if ! is_truthy "${ENABLE_LEGACY:-}"; then
+      if is_truthy "${MIXED_P2P:-}"; then
         if [ -z "$pool_num" ]; then
           cp -f "$SCRIPT_DIR"/topology-bft1.json "$STATE_CLUSTER"
           continue
@@ -706,7 +706,7 @@ _register_governance_in_conway() {
     exit 1
   fi
 
-  if [ -z "${NO_CC:-}" ]; then
+  if ! is_truthy "${NO_CC:-}"; then
     local cc_size
     cc_size="$(cardano-cli conway query committee-state --active --testnet-magic "$NETWORK_MAGIC" |
       grep -c '"status": "Active"')"
