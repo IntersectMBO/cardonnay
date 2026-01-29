@@ -491,3 +491,69 @@ create_committee_keys_in_genesis() {
   cat "${STATE_CLUSTER}/shelley/genesis.conway.json_jq" > "${STATE_CLUSTER}/shelley/genesis.conway.json"
   rm -f "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
 }
+
+edit_genesis_conf() {
+  local conf="${1:?"Missing node config file"}"
+
+  jq \
+    --arg byron_hash "$BYRON_GENESIS_HASH" \
+    --arg shelley_hash "$SHELLEY_GENESIS_HASH" \
+    --arg alonzo_hash "$ALONZO_GENESIS_HASH" \
+    --arg conway_hash "$CONWAY_GENESIS_HASH" \
+    --arg dijkstra_hash "$DIJKSTRA_GENESIS_HASH" \
+    '.ByronGenesisHash = $byron_hash
+    | .ShelleyGenesisHash = $shelley_hash
+    | .AlonzoGenesisHash = $alonzo_hash
+    | .ConwayGenesisHash = $conway_hash
+    | if $dijkstra_hash != "" then
+        (.DijkstraGenesisFile = "shelley/genesis.dijkstra.json"
+          | .DijkstraGenesisHash = $dijkstra_hash
+          | .ExperimentalProtocolsEnabled = true
+          | .ExperimentalHardForksEnabled = true)
+      else
+        .
+      end
+    ' "$conf" > "${conf}.json_jq"
+  cat "${conf}.json_jq" > "$conf"
+  rm -f "${conf}.json_jq"
+}
+
+edit_utxo_backend_conf() {
+  local conf="${1:?"Missing node config file"}"
+  local node_name="${2:?"Missing node name"}"
+  local pool_num="${3:-}"
+  local live_tables_base="${STATE_CLUSTER_NAME:?}/lmdb"
+  local utxo_backend index
+
+  utxo_backend="${UTXO_BACKEND:-}"
+  # Rotate through the mixed backends for block producing nodes, if set.
+  if [ -n "$pool_num" ] && [ "${#UTXO_BACKENDS[@]}" -gt 0 ]; then
+    index=$(( (pool_num - 1) % ${#UTXO_BACKENDS[@]} ))
+    utxo_backend="${UTXO_BACKENDS[$index]}"
+  fi
+  if [ "$utxo_backend" = "empty" ]; then
+    utxo_backend=""
+  fi
+
+  jq \
+    --arg backend "$utxo_backend" \
+    --arg live_tables_path "${live_tables_base}-${node_name}" \
+    ' if $backend == "mem" then
+        (.LedgerDB.Backend = "V2InMemory"
+         | .LedgerDB.SnapshotInterval = 216)
+      elif $backend == "disk" then
+        .LedgerDB.Backend = "V2LSM"
+      elif $backend == "disklmdb" then
+        (.LedgerDB.Backend = "V1LMDB"
+         | .LedgerDB.LiveTablesPath = $live_tables_path
+         | .LedgerDB.SnapshotInterval = 300)
+      elif has("LedgerDB") then
+        .LedgerDB |= del(.Backend)
+      else
+        .
+      end
+    | if (.LedgerDB? // {}) == {} then del(.LedgerDB) else . end
+    ' "$conf" > "${conf}.json_jq"
+  cat "${conf}.json_jq" > "$conf"
+  rm -f "${conf}.json_jq"
+}
