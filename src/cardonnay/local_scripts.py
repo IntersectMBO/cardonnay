@@ -154,21 +154,8 @@ class LocalScripts:
         new_content = new_content.replace("%%WEBSERVER_PORT%%", str(instance_ports.webserver))
         return new_content
 
-    def _gen_legacy_topology(self, addr: str, ports: tp.Iterable[int]) -> dict:
-        """Generate legacy topology for given ports."""
-        producers = [
-            {
-                "addr": addr,
-                "port": port,
-                "valency": 1,
-            }
-            for port in ports
-        ]
-        topology = {"Producers": producers}
-        return topology
-
     def _gen_p2p_topology(self, addr: str, ports: list[int], fixed_ports: list[int]) -> dict:
-        """Generate p2p topology for given ports."""
+        """Generate topology for given ports."""
         # Select fixed ports and several randomly selected ports
         rand_threshold = 3
         sample_ports = random.sample(ports, 3) if len(ports) > rand_threshold else ports
@@ -234,23 +221,14 @@ class LocalScripts:
             all_except = all_nodes[:]
             all_except.remove(node_rec.node)
             node_name = "bft1" if node_rec.num == 0 else f"pool{node_rec.num}"
-
-            # Legacy topology
-
-            topology = self._gen_legacy_topology(addr=addr, ports=all_except)
-            helpers.write_json(out_file=destdir / f"topology-{node_name}.json", content=topology)
-
-            # P2P topology
-
             # Bft1 and first three pools
             fixed_ports = all_except[:4]
 
-            p2p_topology = self._gen_p2p_topology(
+            topology_content = self._gen_p2p_topology(
                 addr=addr, ports=all_except, fixed_ports=fixed_ports
             )
-
             helpers.write_json(
-                out_file=destdir / f"p2p-topology-{node_name}.json", content=p2p_topology
+                out_file=destdir / f"topology-{node_name}.json", content=topology_content
             )
 
     def _reconfigure_local(self, indir: pl.Path, destdir: pl.Path, instance_num: int) -> None:

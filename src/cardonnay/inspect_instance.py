@@ -254,7 +254,6 @@ def get_config(statedir: pl.Path) -> structs.CombinedConfig:
         open(statedir / "config-pool1.json", encoding="utf-8") as fp_in,
     ):
         data = json.load(fp_in)
-        config.EnableP2P = data.get("EnableP2P")
         config.ledgerdb_backend = (
             data.get("LedgerDB", {}).get("Backend", "default") if "LedgerDB" in data else "default"
         )

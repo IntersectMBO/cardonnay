@@ -229,7 +229,6 @@ edit_node_configs() {
       utxo_backend=""
     fi
 
-
     jq \
       --arg byron_hash "$BYRON_GENESIS_HASH" \
       --arg shelley_hash "$SHELLEY_GENESIS_HASH" \
@@ -266,34 +265,6 @@ edit_node_configs() {
         end
       | if (.LedgerDB? // {}) == {} then del(.LedgerDB) else . end
       ' "$conf" > "${STATE_CLUSTER}/${fname}"
-
-    if ! is_truthy "${ENABLE_LEGACY:-}"; then
-      if is_truthy "${MIXED_P2P:-}"; then
-        if [ -z "$pool_num" ]; then
-          cp -f "$SCRIPT_DIR"/topology-bft1.json "$STATE_CLUSTER"
-          continue
-        fi
-
-        if [ "$((pool_num % 2))" != 0 ]; then
-          cp -f "${SCRIPT_DIR}/topology-pool${pool_num}.json" "$STATE_CLUSTER"
-          continue
-        fi
-      fi
-
-      jq \
-        '.EnableP2P = true
-        | .MaxConcurrencyBulkSync = 2
-        | .MaxConcurrencyDeadline = 4
-        | .TargetNumberOfRootPeers = 100
-        | .TargetNumberOfKnownPeers = 100
-        | .TargetNumberOfEstablishedPeers = 50
-        | .TargetNumberOfActivePeers = 20
-        | .TraceBlockFetchClient = true
-        | .TraceChainSyncClient = true' \
-        "${STATE_CLUSTER}/${fname}" > "${STATE_CLUSTER}/${fname}_jq"
-      cat "${STATE_CLUSTER}/${fname}_jq" > "${STATE_CLUSTER}/${fname}"
-      rm -f "${STATE_CLUSTER}/${fname}_jq"
-    fi
   done
 }
 
