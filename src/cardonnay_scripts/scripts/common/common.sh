@@ -410,17 +410,7 @@ setup_state_cluster() {
   cp "$SCRIPT_DIR/testnet.json" "$STATE_CLUSTER"
   cp "$SCRIPT_DIR"/*genesis*.spec.json "$genesis_init_dir"
   cp "$SCRIPT_DIR"/cost_models*.json "$genesis_init_dir" 2>/dev/null || true
-
-  if ! is_truthy "${ENABLE_LEGACY:-}"; then
-    local tconf tfname
-    for tconf in "$SCRIPT_DIR"/p2p-topology-*.json; do
-      [ -e "$tconf" ] || { echo "No p2p topology files found in ${SCRIPT_DIR}, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
-      tfname="${tconf##*/p2p-}"
-      cp "$tconf" "${STATE_CLUSTER}/${tfname}"
-    done
-  else
-    cp "$SCRIPT_DIR"/topology-*.json "$STATE_CLUSTER"
-  fi
+  cp "$SCRIPT_DIR"/topology-*.json "$STATE_CLUSTER"
 }
 
 create_dreps_files() {

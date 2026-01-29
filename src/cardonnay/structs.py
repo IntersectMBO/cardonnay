@@ -86,7 +86,6 @@ class CombinedConfig(pydantic.BaseModel):
     govActionLifetime: int | None = None  # noqa: N815
 
     # Pool1 config-pool1.json
-    EnableP2P: bool | None = None
     ledgerdb_backend: str = "default"
 
     # Derived
