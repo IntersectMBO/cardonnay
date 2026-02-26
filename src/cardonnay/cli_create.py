@@ -19,6 +19,7 @@ LOGGER = logging.getLogger(__name__)
 def write_env_vars(env: dict[str, str], workdir: pl.Path, instance_num: int) -> None:
     """Write environment variables to a file for sourcing later."""
     sfile = workdir / f".source_cluster{instance_num}"
+    sfile.unlink(missing_ok=True)
     content = [f'export {var_name}="{val}"' for var_name, val in env.items()]
     sfile.write_text("\n".join(content))
 
