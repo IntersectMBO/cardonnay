@@ -36,7 +36,8 @@ def get_workdir(workdir: ttypes.FileType) -> pl.Path:
     if workdir != "":
         return pl.Path(workdir).expanduser()
 
-    return pl.Path("/var/tmp/cardonnay")
+    username = os.getlogin()
+    return pl.Path(f"/var/tmp/cardonnay-of-{username}")
 
 
 def get_running_instances(workdir: pl.Path) -> set[int]:

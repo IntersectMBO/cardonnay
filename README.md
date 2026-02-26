@@ -19,7 +19,7 @@ It supports multiple preconfigured testnet types and makes it easy to inspect an
 
 ```sh
 $ cardonnay create -t conway_fast
-Starting the testnet cluster with `/var/tmp/cardonnay/cluster0_conway_fast/start-cluster`:
+Starting the testnet cluster with `/var/tmp/cardonnay-of-user/cluster0_conway_fast/start-cluster`:
 [...]
 Cluster started 🚀
 ```
@@ -48,8 +48,8 @@ Cluster started 🚀
 ```json
 {
   "address": "addr_test1vpgm9cj9u3k63642vju9jqgeqy393upttt0qtwptlesy08gx620qd",
-  "vkey_file": "/var/tmp/cardonnay/state-cluster0/shelley/genesis-utxo.vkey",
-  "skey_file": "/var/tmp/cardonnay/state-cluster0/shelley/genesis-utxo.skey"
+  "vkey_file": "/var/tmp/cardonnay-of-user/state-cluster0/shelley/genesis-utxo.vkey",
+  "skey_file": "/var/tmp/cardonnay-of-user/state-cluster0/shelley/genesis-utxo.skey"
 }
 ```
 
@@ -64,7 +64,7 @@ cardano-cli query tip --testnet-magic 42
 
 ```sh
 $ cardonnay control stop-all
-Stopping the testnet cluster with `/var/tmp/cardonnay/state-cluster0/stop-cluster`:
+Stopping the testnet cluster with `/var/tmp/cardonnay-of-user/state-cluster0/stop-cluster`:
 [...]
 Cluster terminated!
 ```
