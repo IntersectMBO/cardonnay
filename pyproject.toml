@@ -9,13 +9,12 @@ authors = [
 ]
 description = "Cardano Local Testnet"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["cardano", "cardano-node", "cardano-cli"]
 license = "Apache-2.0"
 classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -71,9 +70,3 @@ no_implicit_optional = true
 allow_untyped_globals = false
 warn_unused_configs = true
 warn_return_any = true
-
-[tool.pyrefly]
-project_includes = ["src"]
-ignore_errors_in_generated_code = true
-use_untyped_imports = true
-ignore_missing_source = true
