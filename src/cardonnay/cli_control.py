@@ -74,7 +74,7 @@ def testnet_restart_nodes(statedir: pl.Path, env: dict) -> int:
 
 def testnet_restart_all(statedir: pl.Path, env: dict) -> int:
     """Restart the entire testnet cluster by running the supervisorctl command."""
-    script = statedir / "supervisorctl"
+    script = statedir / "supervisorctl_local"
     if not script.exists():
         LOGGER.error(f"The supervisorctl script '{script}' does not exist.")
         return 1
