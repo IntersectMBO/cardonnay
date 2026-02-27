@@ -270,7 +270,7 @@ EoF
 create_cluster_scripts() {
   printf "#!/bin/sh\n\nsupervisorctl -s unix:///%s start all" "${SUPERVISORD_SOCKET_PATH:?}" > "${STATE_CLUSTER:?}/supervisorctl_start"
   printf "#!/bin/sh\n\nsupervisorctl -s unix:///%s restart nodes:" "$SUPERVISORD_SOCKET_PATH" > "${STATE_CLUSTER}/supervisorctl_restart_nodes"
-  printf "#!/bin/sh\n\nsupervisorctl -s unix:///%s \"\$@\"" "$SUPERVISORD_SOCKET_PATH" > "${STATE_CLUSTER}/supervisorctl"
+  printf "#!/bin/sh\n\nsupervisorctl -s unix:///%s \"\$@\"" "$SUPERVISORD_SOCKET_PATH" > "${STATE_CLUSTER}/supervisorctl_local"
 
   cat > "${STATE_CLUSTER}/supervisord_start" <<'EoF'
 #!/usr/bin/env bash
