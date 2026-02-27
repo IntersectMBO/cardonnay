@@ -1,3 +1,3 @@
 from importlib import resources
 
-SCRIPTS_ROOT = resources.files(__package__) / "scripts"
+SCRIPTS_ROOT = resources.files(__package__ or "") / "scripts"
