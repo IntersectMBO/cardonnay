@@ -471,6 +471,7 @@ main() {
   start_cluster_nodes
   start_optional_services
   register_entities_in_conway
+  use_genesis_mode
 
   : > "$START_CLUSTER_STATUS"
   echo "Cluster started 🚀"
