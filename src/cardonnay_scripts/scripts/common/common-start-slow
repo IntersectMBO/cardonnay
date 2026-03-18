@@ -156,32 +156,25 @@ create_genesis() {
       "${STATE_CLUSTER}/shelley/genesis.dijkstra.json"
   fi
 
-  jq -r '
-    .initialFunds = {}' \
-    < "${STATE_CLUSTER}/shelley/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json_jq"
-  cat "${STATE_CLUSTER}/shelley/genesis.json_jq" > "${STATE_CLUSTER}/shelley/genesis.json"
-  rm -f "${STATE_CLUSTER}/shelley/genesis.json_jq"
+  jq '.initialFunds = {}' \
+    "${STATE_CLUSTER}/shelley/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.tmp.json"
+  mv -f "${STATE_CLUSTER}/shelley/genesis.tmp.json" "${STATE_CLUSTER}/shelley/genesis.json"
 
-  jq \
-    '.costModels.PlutusV2 |= .[0:175]
+  jq '
+    .costModels.PlutusV2 |= .[0:175]
     | if (.costModels.PlutusV2? // []) == [] then del(.costModels.PlutusV2) else . end
-    ' "${STATE_CLUSTER}/shelley/genesis.alonzo.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.json_jq"
-  cat "${STATE_CLUSTER}/shelley/genesis.alonzo.json_jq" > "${STATE_CLUSTER}/shelley/genesis.alonzo.json"
-  rm -f "${STATE_CLUSTER}/shelley/genesis.alonzo.json_jq"
+    ' "${STATE_CLUSTER}/shelley/genesis.alonzo.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.tmp.json"
+  mv -f "${STATE_CLUSTER}/shelley/genesis.alonzo.tmp.json" "${STATE_CLUSTER}/shelley/genesis.alonzo.json"
 }
 
 get_genesis_data() {
-  KEY_DEPOSIT="$(jq '.protocolParams.keyDeposit' \
-    < "${STATE_CLUSTER}/shelley/genesis.json")"
+  KEY_DEPOSIT="$(jq '.protocolParams.keyDeposit' < "${STATE_CLUSTER}/shelley/genesis.json")"
   readonly KEY_DEPOSIT
-  POOL_DEPOSIT="$(jq '.protocolParams.poolDeposit' \
-    < "${STATE_CLUSTER}/shelley/genesis.json")"
+  POOL_DEPOSIT="$(jq '.protocolParams.poolDeposit' < "${STATE_CLUSTER}/shelley/genesis.json")"
   readonly POOL_DEPOSIT
-  DREP_DEPOSIT="$(jq '.dRepDeposit' \
-    < "${STATE_CLUSTER}/shelley/genesis.conway.json")"
+  DREP_DEPOSIT="$(jq '.dRepDeposit' < "${STATE_CLUSTER}/shelley/genesis.conway.json")"
   readonly DREP_DEPOSIT
-  GOV_ACTION_DEPOSIT="$(jq '.govActionDeposit' \
-    < "${STATE_CLUSTER}/shelley/genesis.conway.json")"
+  GOV_ACTION_DEPOSIT="$(jq '.govActionDeposit' < "${STATE_CLUSTER}/shelley/genesis.conway.json")"
   readonly GOV_ACTION_DEPOSIT
 
   BYRON_GENESIS_HASH="$(cardano_cli_log byron genesis print-genesis-hash --genesis-json \
@@ -738,7 +731,7 @@ _wait_pv9_cost_model_enacted() {
 
   save_protocol_params "$PPARAMS_FILE"
   local plutusv2_len
-  plutusv2_len="$(jq ".costModels.PlutusV2 | length" < "$PPARAMS_FILE")"
+  plutusv2_len="$(jq '.costModels.PlutusV2 | length' < "$PPARAMS_FILE")"
   if [ "$plutusv2_len" != 185 ]; then
     echo "Unexpected PlutusV2 cost model length '$plutusv2_len' on line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
@@ -895,11 +888,8 @@ hf_to_shelley() {
   for conf in "$STATE_CLUSTER"/config-*.json; do
     [ -e "$conf" ] || { echo "No config files found in ${STATE_CLUSTER}, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
     local fname="${conf##*/}"
-    jq '
-      ."LastKnownBlockVersion-Major" = 2' \
-      "$conf" > "${STATE_CLUSTER}/${fname}_jq"
-    cat "${STATE_CLUSTER}/${fname}_jq" > "${STATE_CLUSTER}/${fname}"
-    rm -f "${STATE_CLUSTER}/${fname}_jq"
+    jq '."LastKnownBlockVersion-Major" = 2' "$conf" > "${STATE_CLUSTER}/${fname}_jq"
+    mv -f "${STATE_CLUSTER}/${fname}_jq" "${STATE_CLUSTER}/${fname}"
   done
 
   supervisorctl -s unix:///"$SUPERVISORD_SOCKET_PATH" restart nodes:
@@ -1008,7 +998,7 @@ hf_to_alonzo_pv6() {
 
   if save_protocol_params "$PPARAMS_FILE"; then
     local cur_protver
-    cur_protver="$(jq ".protocolVersion.major" < "$PPARAMS_FILE")"
+    cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
     [ "$cur_protver" = 6 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
   fi
 }
@@ -1037,7 +1027,7 @@ hf_to_babbage_pv8() {
 
   if save_protocol_params "$PPARAMS_FILE"; then
     local cur_protver
-    cur_protver="$(jq ".protocolVersion.major" < "$PPARAMS_FILE")"
+    cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
     [ "$cur_protver" = 8 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
   fi
 }
@@ -1055,7 +1045,7 @@ hf_to_conway() {
 
   save_protocol_params "$PPARAMS_FILE"
   local cur_protver
-  cur_protver="$(jq ".protocolVersion.major" < "$PPARAMS_FILE")"
+  cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
   [ "$cur_protver" = 9 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 
   _register_governance_in_conway
@@ -1094,7 +1084,7 @@ hf_to_conway_pv10() {
 
   save_protocol_params "$PPARAMS_FILE"
   local cur_protver
-  cur_protver="$(jq ".protocolVersion.major" < "$PPARAMS_FILE")"
+  cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
   [ "$cur_protver" = 10 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 }
 
@@ -1125,7 +1115,7 @@ hf_to_conway_pv11() {
 
   save_protocol_params "$PPARAMS_FILE"
   local cur_protver
-  cur_protver="$(jq ".protocolVersion.major" < "$PPARAMS_FILE")"
+  cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
   [ "$cur_protver" = 11 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 }
 

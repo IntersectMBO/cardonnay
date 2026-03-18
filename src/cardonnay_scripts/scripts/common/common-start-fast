@@ -145,13 +145,13 @@ create_genesis() {
 
   jq \
     --argjson max_supply "$MAX_SUPPLY" \
-    --argjson prot_ver "$PROTOCOL_VERSION" \
-    '.protocolParams.protocolVersion.major = $prot_ver
-    | .maxLovelaceSupply = $max_supply' \
-    "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
+    --argjson prot_ver "$PROTOCOL_VERSION" '
+    .protocolParams.protocolVersion.major = $prot_ver
+    | .maxLovelaceSupply = $max_supply
+    ' "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
   rm -f "${STATE_CLUSTER}/create_staked/genesis.json"
-  jq \
-    '.costModels.PlutusV2 |= .[0:175]
+  jq '
+    .costModels.PlutusV2 |= .[0:175]
     | if (.costModels.PlutusV2? // []) == [] then del(.costModels.PlutusV2) else . end
     ' "${STATE_CLUSTER}/create_staked/genesis.alonzo.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.json"
   rm -f "${STATE_CLUSTER}/create_staked/genesis.alonzo.json"
@@ -220,12 +220,12 @@ edit_node_configs() {
     fi
 
     jq \
-      --argjson prot_ver "$PROTOCOL_VERSION" \
-      ' if $prot_ver >= 12 then
-          .TestDijkstraHardForkAtEpoch = 0
-        else
-          .
-        end
+      --argjson prot_ver "$PROTOCOL_VERSION" '
+      if $prot_ver >= 12 then
+        .TestDijkstraHardForkAtEpoch = 0
+      else
+        .
+      end
       | ."LastKnownBlockVersion-Major" = $prot_ver
       ' "$conf" > "$conf_target"
 
