@@ -557,3 +557,34 @@ edit_utxo_backend_conf() {
   cat "${conf}.json_jq" > "$conf"
   rm -f "${conf}.json_jq"
 }
+
+use_genesis_mode() {
+  if ! is_truthy "${USE_GENESIS_MODE:-}"; then
+    return
+  fi
+
+  echo "Setting up GenesisMode for pools, restarting nodes"
+
+  cardano_cli_log query ledger-peer-snapshot \
+    --testnet-magic "$NETWORK_MAGIC" \
+    --socket-path "${STATE_CLUSTER}/pool1.socket" \
+    --output-json \
+    --out-file "${STATE_CLUSTER}/peer-snapshot.json"
+  [ -e "${STATE_CLUSTER}/peer-snapshot.json" ] || \
+    { echo "Failed to get peer snapshot from pool1, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+
+  local i
+  for i in $(seq 1 "$NUM_POOLS"); do
+    jq \
+      '.localRoots[] += {"trustable": true}
+      | .peerSnapshotFile = "peer-snapshot.json"' \
+      "${STATE_CLUSTER}/topology-pool${i}.json" > "${STATE_CLUSTER}/topology-pool${i}.tmp.json"
+    mv -f "${STATE_CLUSTER}/topology-pool${i}.tmp.json" "${STATE_CLUSTER}/topology-pool${i}.json"
+
+    jq '.ConsensusMode = "GenesisMode"' \
+      "${STATE_CLUSTER}/config-pool${i}.json" > "${STATE_CLUSTER}/config-pool${i}.tmp.json"
+    mv -f "${STATE_CLUSTER}/config-pool${i}.tmp.json" "${STATE_CLUSTER}/config-pool${i}.json"
+  done
+
+  supervisorctl -s unix:///"$SUPERVISORD_SOCKET_PATH" restart nodes:
+}

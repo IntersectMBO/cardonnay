@@ -1159,6 +1159,8 @@ main() {
   hf_to_conway_pv10 "$(get_epoch)"
   hf_to_conway_pv11 "$(get_epoch)"
 
+  use_genesis_mode
+
   : > "$START_CLUSTER_STATUS"
   echo "Cluster started 🚀"
 }

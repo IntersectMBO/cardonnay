@@ -8,6 +8,7 @@
         "UTXO_BACKEND": "'mem', 'disk', 'disklmdb' or `empty`, default is `empty` (mem without configuration) if unset",
         "NO_CC": "if set, will not create committee",
         "DRY_RUN": "if set, will not start the cluster",
-        "PROTOCOL_VERSION": "if set, will use the specified protocol version (e.g., 11 for latest Conway, etc.)"
+        "PROTOCOL_VERSION": "if set, will use the specified protocol version (e.g., 11 for latest Conway, etc.)",
+        "USE_GENESIS_MODE": "if set, will switch to using GenesisMode and peer snapshot file"
     }
 }
