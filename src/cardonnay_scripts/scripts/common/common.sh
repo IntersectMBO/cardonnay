@@ -114,7 +114,7 @@ get_slot() {
 }
 
 get_era() {
-  cardano_cli_log latest query tip --testnet-magic "$NETWORK_MAGIC" | jq -r ".era"
+  cardano_cli_log latest query tip --testnet-magic "$NETWORK_MAGIC" | jq -r '.era'
 }
 
 get_sec_to_epoch_end() {
@@ -482,14 +482,13 @@ create_committee_keys_in_genesis() {
   key_hash_json="$(jq -nR '[inputs | {("keyHash-" + .): 10000}] | add' \
     "$STATE_CLUSTER"/governance_data/cc_member*_committee_cold.hash)"
   jq \
-    --argjson keyHashJson "$key_hash_json" \
-    '.committee.members = $keyHashJson
+    --argjson keyHashJson "$key_hash_json" '
+    .committee.members = $keyHashJson
     | .committee.threshold = 0.6
     | .committeeMinSize = 2
-    | .plutusV3CostModel |= .[0:251]' \
-    "${STATE_CLUSTER}/shelley/genesis.conway.json" > "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
-  cat "${STATE_CLUSTER}/shelley/genesis.conway.json_jq" > "${STATE_CLUSTER}/shelley/genesis.conway.json"
-  rm -f "${STATE_CLUSTER}/shelley/genesis.conway.json_jq"
+    | .plutusV3CostModel |= .[0:251]
+    ' "${STATE_CLUSTER}/shelley/genesis.conway.json" > "${STATE_CLUSTER}/shelley/genesis.conway.tmp.json"
+  mv -f "${STATE_CLUSTER}/shelley/genesis.conway.tmp.json" "${STATE_CLUSTER}/shelley/genesis.conway.json"
 }
 
 edit_genesis_conf() {
@@ -500,8 +499,8 @@ edit_genesis_conf() {
     --arg shelley_hash "$SHELLEY_GENESIS_HASH" \
     --arg alonzo_hash "$ALONZO_GENESIS_HASH" \
     --arg conway_hash "$CONWAY_GENESIS_HASH" \
-    --arg dijkstra_hash "$DIJKSTRA_GENESIS_HASH" \
-    '.ByronGenesisHash = $byron_hash
+    --arg dijkstra_hash "$DIJKSTRA_GENESIS_HASH" '
+    .ByronGenesisHash = $byron_hash
     | .ShelleyGenesisHash = $shelley_hash
     | .AlonzoGenesisHash = $alonzo_hash
     | .ConwayGenesisHash = $conway_hash
@@ -513,9 +512,8 @@ edit_genesis_conf() {
       else
         .
       end
-    ' "$conf" > "${conf}.json_jq"
-  cat "${conf}.json_jq" > "$conf"
-  rm -f "${conf}.json_jq"
+    ' "$conf" > "${conf}.tmp.json"
+  mv -f "${conf}.tmp.json" "$conf"
 }
 
 edit_utxo_backend_conf() {
@@ -537,25 +535,24 @@ edit_utxo_backend_conf() {
 
   jq \
     --arg backend "$utxo_backend" \
-    --arg live_tables_path "${live_tables_base}-${node_name}" \
-    ' if $backend == "mem" then
-        (.LedgerDB.Backend = "V2InMemory"
-         | .LedgerDB.SnapshotInterval = 216)
-      elif $backend == "disk" then
-        .LedgerDB.Backend = "V2LSM"
-      elif $backend == "disklmdb" then
-        (.LedgerDB.Backend = "V1LMDB"
-         | .LedgerDB.LiveTablesPath = $live_tables_path
-         | .LedgerDB.SnapshotInterval = 300)
-      elif has("LedgerDB") then
-        .LedgerDB |= del(.Backend)
-      else
-        .
-      end
+    --arg live_tables_path "${live_tables_base}-${node_name}" '
+    if $backend == "mem" then
+      (.LedgerDB.Backend = "V2InMemory"
+       | .LedgerDB.SnapshotInterval = 216)
+    elif $backend == "disk" then
+      .LedgerDB.Backend = "V2LSM"
+    elif $backend == "disklmdb" then
+      (.LedgerDB.Backend = "V1LMDB"
+       | .LedgerDB.LiveTablesPath = $live_tables_path
+       | .LedgerDB.SnapshotInterval = 300)
+    elif has("LedgerDB") then
+      .LedgerDB |= del(.Backend)
+    else
+      .
+    end
     | if (.LedgerDB? // {}) == {} then del(.LedgerDB) else . end
-    ' "$conf" > "${conf}.json_jq"
-  cat "${conf}.json_jq" > "$conf"
-  rm -f "${conf}.json_jq"
+    ' "$conf" > "${conf}.tmp.json"
+  mv -f "${conf}.tmp.json" "$conf"
 }
 
 use_genesis_mode() {
@@ -575,10 +572,10 @@ use_genesis_mode() {
 
   local i
   for i in $(seq 1 "$NUM_POOLS"); do
-    jq \
-      '.localRoots[] += {"trustable": true}
-      | .peerSnapshotFile = "peer-snapshot.json"' \
-      "${STATE_CLUSTER}/topology-pool${i}.json" > "${STATE_CLUSTER}/topology-pool${i}.tmp.json"
+    jq '
+      .localRoots[] += {"trustable": true}
+      | .peerSnapshotFile = "peer-snapshot.json"
+      ' "${STATE_CLUSTER}/topology-pool${i}.json" > "${STATE_CLUSTER}/topology-pool${i}.tmp.json"
     mv -f "${STATE_CLUSTER}/topology-pool${i}.tmp.json" "${STATE_CLUSTER}/topology-pool${i}.json"
 
     jq '.ConsensusMode = "GenesisMode"' \
