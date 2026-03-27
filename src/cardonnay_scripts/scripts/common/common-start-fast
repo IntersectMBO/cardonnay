@@ -12,6 +12,7 @@ readonly SUBMIT_DELAY=5
 readonly POOL_PLEDGE=1000000000000
 readonly DREP_DELEGATED=500000000000
 readonly BYRON_INIT_SUPPLY=10020000000
+readonly TX_GENERATOR_MIN_FUNDS=5000000000000000
 
 readonly INSTANCE_NUM="%%INSTANCE_NUM%%"
 readonly NUM_POOLS=%%NUM_POOLS%%
@@ -134,7 +135,7 @@ create_genesis() {
     --genesis-dir "${STATE_CLUSTER}/create_staked" \
     --testnet-magic "$NETWORK_MAGIC" \
     --gen-pools "$NUM_POOLS" \
-    --gen-utxo-keys 1 \
+    --gen-utxo-keys 2 \
     --supply "$NONDELEG_SUPPLY" \
     --gen-stake-delegs "$NUM_POOLS" \
     --supply-delegated "$DELEG_SUPPLY" \
@@ -163,15 +164,6 @@ create_genesis() {
     cp "${STATE_CLUSTER}/shelley/genesis.dijkstra.spec.json" \
       "${STATE_CLUSTER}/shelley/genesis.dijkstra.json"
   fi
-
-  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo1.skey" "${STATE_CLUSTER}/shelley/genesis-utxo.skey"
-  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo1.vkey" "${STATE_CLUSTER}/shelley/genesis-utxo.vkey"
-  cardano_cli_log conway address build --payment-verification-key-file \
-    "${STATE_CLUSTER}/shelley/genesis-utxo.vkey" \
-    --out-file "${STATE_CLUSTER}/shelley/genesis-utxo.addr" \
-    --testnet-magic "$NETWORK_MAGIC"
-
-  mv "${STATE_CLUSTER}/create_staked/stake-delegator-keys" "${STATE_CLUSTER}/shelley/stake-delegator-keys"
 }
 
 get_genesis_data() {
@@ -200,6 +192,27 @@ get_genesis_data() {
       "${STATE_CLUSTER}/shelley/genesis.dijkstra.json")"
   fi
   readonly DIJKSTRA_GENESIS_HASH
+}
+
+create_genesis_utxos() {
+  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo1.skey" "${STATE_CLUSTER}/shelley/genesis-utxo.skey"
+  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo1.vkey" "${STATE_CLUSTER}/shelley/genesis-utxo.vkey"
+  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo2.skey" "${STATE_CLUSTER}/shelley/genesis-utxo2.skey"
+  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo2.vkey" "${STATE_CLUSTER}/shelley/genesis-utxo2.vkey"
+  cardano_cli_log conway address build --payment-verification-key-file \
+    "${STATE_CLUSTER}/shelley/genesis-utxo.vkey" \
+    --out-file "${STATE_CLUSTER}/shelley/genesis-utxo.addr" \
+    --testnet-magic "$NETWORK_MAGIC"
+  cardano_cli_log conway address build --payment-verification-key-file \
+    "${STATE_CLUSTER}/shelley/genesis-utxo2.vkey" \
+    --out-file "${STATE_CLUSTER}/shelley/genesis-utxo2.addr" \
+    --testnet-magic "$NETWORK_MAGIC"
+
+  mv "${STATE_CLUSTER}/create_staked/stake-delegator-keys" "${STATE_CLUSTER}/shelley/stake-delegator-keys"
+
+  FAUCET_ADDR="$(<"${STATE_CLUSTER}/shelley/genesis-utxo.addr")"
+  readonly FAUCET_ADDR
+  readonly FAUCET_SKEY="${STATE_CLUSTER}/shelley/genesis-utxo.skey"
 }
 
 edit_node_configs() {
@@ -363,11 +376,9 @@ register_entities_in_conway() {
   local needed_amount="$((needed_amount_pools + needed_amount_dreps))"
 
   local fee_buffer=100000000
-  local txin_addr
-  txin_addr="$(<"$STATE_CLUSTER"/shelley/genesis-utxo.addr)"
   local stop_txin_amount="$((needed_amount + fee_buffer))"
 
-  get_txins "$txin_addr" "$stop_txin_amount"
+  get_txins "$FAUCET_ADDR" "$stop_txin_amount"
 
   local -a pool_args=()
   local -a pool_signing=()
@@ -420,7 +431,7 @@ register_entities_in_conway() {
 
   cardano_cli_log conway transaction build \
     "${TXINS[@]}" \
-    --change-address   "$txin_addr" \
+    --change-address   "$FAUCET_ADDR" \
     "${pool_args[@]}" \
     "${cc_args[@]}" \
     "${dreps_args[@]}" \
@@ -434,7 +445,7 @@ register_entities_in_conway() {
     "${delegate_signing[@]}" \
     "${cc_signing[@]}" \
     "${dreps_signing[@]}" \
-    --signing-key-file "${STATE_CLUSTER}/shelley/genesis-utxo.skey" \
+    --signing-key-file "$FAUCET_SKEY" \
     --testnet-magic    "$NETWORK_MAGIC" \
     --tx-body-file     "${STATE_CLUSTER}/shelley/transfer-register-delegate-tx.txbody" \
     --out-file         "${STATE_CLUSTER}/shelley/transfer-register-delegate-tx.tx"
@@ -461,9 +472,10 @@ register_entities_in_conway() {
 main() {
   initialize_globals
   setup_state_cluster "${STATE_CLUSTER}/create_staked"
-  configure_supervisor
+  configure_supervisor "${AUTORESTART_NODES:-false}"
   create_genesis
   create_committee_keys_in_genesis
+  create_genesis_utxos
   get_genesis_data
   edit_node_configs
   create_bft_nodes_files
@@ -474,6 +486,7 @@ main() {
   start_optional_services
   register_entities_in_conway
   use_genesis_mode
+  setup_tx_generator "$TX_GENERATOR_MIN_FUNDS"
 
   : > "$START_CLUSTER_STATUS"
   echo "Cluster started 🚀"

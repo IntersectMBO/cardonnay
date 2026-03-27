@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+initialize() {
+  local retval=0
+  local socket_path state_cluster
+
+  if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+    echo "CARDANO_NODE_SOCKET_PATH is not set" >&2
+    retval=1
+  fi
+  if ! command -v tx-generator &> /dev/null; then
+    echo "tx-generator is not available in PATH" >&2
+    retval=1
+  fi
+  if [ "$retval" -ne 0 ]; then
+    exit "$retval"
+  fi
+
+  socket_path="$(readlink -m "${CARDANO_NODE_SOCKET_PATH:-}")"
+  state_cluster="${socket_path%/*}"
+  readonly GENERATOR_CONFIG="${state_cluster}/tx-generator-config.json"
+
+  if [ ! -f "$GENERATOR_CONFIG" ]; then
+    echo "Generator config file not found at $GENERATOR_CONFIG" >&2
+    exit 1
+  fi
+
+  cd "$state_cluster"
+}
+
+wait_for_socket() {
+  for _ in {1..5}; do
+    if [ -S "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+      return 0
+    fi
+    echo "Waiting for socket ${CARDANO_NODE_SOCKET_PATH:-} to be available..."
+    sleep 5
+  done
+
+  echo "Socket ${CARDANO_NODE_SOCKET_PATH:-} is not available after waiting" >&2
+  exit 1
+}
+
+run_tx_generator() {
+  local attempt=1
+
+  while true; do
+    wait_for_socket
+
+    echo "Generating transactions..."
+    if tx-generator -- json_highlevel "$GENERATOR_CONFIG"; then
+      attempt=1
+      sleep 15
+    else
+      if [ $attempt -ge 4 ]; then
+        echo "tx-generator failed after $attempt attempts, exiting." >&2
+        exit 1
+      fi
+      echo "tx-generator failed, retrying in 5 seconds..." >&2
+      attempt=$((attempt + 1))
+      sleep 5
+    fi
+  done
+}
+
+initialize
+run_tx_generator
