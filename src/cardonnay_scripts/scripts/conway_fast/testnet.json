@@ -9,6 +9,7 @@
         "NO_CC": "if set, will not create committee",
         "DRY_RUN": "if set, will not start the cluster",
         "PROTOCOL_VERSION": "if set, will use the specified protocol version (e.g., 11 for latest Conway, etc.)",
+        "ENABLE_TX_GENERATOR": "if set, will configure and start tx-generator",
         "USE_GENESIS_MODE": "if set, will switch to using GenesisMode and peer snapshot file"
     }
 }

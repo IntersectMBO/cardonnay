@@ -75,7 +75,7 @@ get_txins() {
                 --testnet-magic "$NETWORK_MAGIC" \
                 --output-text \
                 --address "$txin_addr" |
-                grep -E "lovelace$|[0-9]$|lovelace \+ TxOutDatumNone$")"
+                grep -E "lovelace$|[0-9]$|lovelace \+ TxOutDatumNone$" || echo "")"
 
     if [ "$TXIN_AMOUNT" -ge "$stop_txin_amount" ]; then
       break
@@ -94,7 +94,11 @@ get_address_balance() {
         continue
       fi
       total_amount="$((total_amount + amount))"
-    done <<< "$(cardano-cli latest query utxo "$@" --output-text | grep " lovelace")"
+    done <<< "$(cardano-cli latest query utxo \
+                --testnet-magic "$NETWORK_MAGIC" \
+                --output-text \
+                "$@" |
+                grep " lovelace" || echo "")"
 
     if [ "$total_amount" -gt 0 ]; then
       break
@@ -201,9 +205,6 @@ save_protocol_params() {
 }
 
 configure_supervisor() {
-  local enable_submit_api
-  enable_submit_api="$(command -v cardano-submit-api >/dev/null 2>&1 && echo 1 || echo 0)"
-
   cat >> "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
 
 [unix_http_server]
@@ -253,13 +254,28 @@ startsecs=5
 EoF
   fi
 
-  if [ "${enable_submit_api:-}" -eq 1 ]; then
+  if command -v cardano-submit-api >/dev/null 2>&1; then
     cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
 [program:submit_api]
 command=./${STATE_CLUSTER_NAME}/run-cardano-submit-api
 stderr_logfile=./${STATE_CLUSTER_NAME}/submit_api.stderr
 stdout_logfile=./${STATE_CLUSTER_NAME}/submit_api.stdout
+autostart=false
+autorestart=false
+startsecs=5
+EoF
+  fi
+
+  if is_truthy "${ENABLE_TX_GENERATOR:-}"; then
+    cp "${SCRIPT_DIR:?}/run-tx-generator" "$STATE_CLUSTER"
+
+    cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
+
+[program:tx_generator]
+command=./${STATE_CLUSTER_NAME}/run-tx-generator
+stderr_logfile=./${STATE_CLUSTER_NAME}/tx-generator.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME}/tx-generator.stdout
 autostart=false
 autorestart=false
 startsecs=5
@@ -340,20 +356,17 @@ start_cluster_nodes() {
 }
 
 start_optional_services() {
-  local enable_submit_api
-  enable_submit_api="$(command -v cardano-submit-api >/dev/null 2>&1 && echo 1 || echo 0)"
-
   if [ -n "${DBSYNC_SCHEMA_DIR:-}" ]; then
     echo "Starting db-sync"
     supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH:?}" start dbsync
   fi
 
-  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ] && [ -n "${SMASH:-}" ]; then
+  if [ -n "${DBSYNC_SCHEMA_DIR:-}" ] && is_truthy "${SMASH:-}"; then
     echo "Starting smash"
     supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH:?}" start smash
   fi
 
-  if [ "${enable_submit_api:-}" -eq 1 ]; then
+  if command -v cardano-submit-api >/dev/null 2>&1; then
     echo "Starting cardano-submit-api"
     supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH:?}" start submit_api
   fi
@@ -584,4 +597,112 @@ use_genesis_mode() {
   done
 
   supervisorctl -s unix:///"$SUPERVISORD_SOCKET_PATH" restart nodes:
+}
+
+_fund_tx_generator() {
+  local addr="${1:?}"
+  local fund_amount="${2:?}"
+  local fee=500000
+  local stop_txin_amount="$((fund_amount + fee))"
+  local tx_base="${STATE_CLUSTER}/shelley/fund-tx-generator"
+  local addr_balance
+
+  addr_balance="$(get_address_balance --address "$addr")"
+  if [ "$addr_balance" -ge "$fund_amount" ]; then
+    echo "Tx generator address already has enough funds: $addr_balance lovelace"
+    return
+  fi
+
+  get_txins "$FAUCET_ADDR" "$stop_txin_amount"
+
+  local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
+
+  cardano_cli_log conway transaction build-raw \
+    --fee    "$fee" \
+    "${TXINS[@]}" \
+    --tx-out "${addr}+${fund_amount}" \
+    --tx-out "${FAUCET_ADDR}+${txout_amount}" \
+    --out-file "${tx_base}-tx.txbody"
+
+  cardano_cli_log conway transaction sign \
+    --signing-key-file "$FAUCET_SKEY" \
+    --testnet-magic    "$NETWORK_MAGIC" \
+    --tx-body-file     "${tx_base}-tx.txbody" \
+    --out-file         "${tx_base}-tx.tx"
+
+  cardano_cli_log conway transaction submit \
+    --tx-file "${tx_base}-tx.tx" \
+    --testnet-magic "$NETWORK_MAGIC"
+
+  sleep "$SUBMIT_DELAY"
+  if ! check_spend_success "${TXINS[@]}"; then
+    echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+}
+
+_gen_tx_generator_config() {
+  if [ $# -lt 4 ]; then
+    echo "Usage: gen_tx_generator_config <topology> <node.socket> <config.json> <genesis.skey>" >&2
+    return 1
+  fi
+
+  local topology_file="$1"
+  local socket_path="$2"
+  local config_file="$3"
+  local skey_file="$4"
+
+  if [ ! -f "$topology_file" ]; then
+    echo "Error: topology file not found: $topology_file" >&2
+    return 1
+  fi
+
+  jq -n \
+    --argjson topology "$(<"$topology_file")" \
+    --arg socket "$socket_path" \
+    --arg config "$config_file" \
+    --arg skey "$skey_file" \
+    '{
+      debugMode: false,
+      tx_count: 50000,
+      tps: 30,
+      inputs_per_tx: 2,
+      outputs_per_tx: 2,
+      tx_fee: 212345,
+      min_utxo_value: 1000000,
+      add_tx_size: 100,
+      init_cooldown: 5,
+      era: "Conway",
+      keepalive: 30,
+      localNodeSocketPath: $socket,
+      nodeConfigFile: $config,
+      sigKey: $skey,
+      targetNodes: [
+        $topology.localRoots[].accessPoints[] |
+        {
+          addr: .address,
+          port: .port,
+          name: ("node" + (.port | tostring))
+        }
+      ],
+      plutus: null
+    }'
+}
+
+setup_tx_generator() {
+  if ! is_truthy "${ENABLE_TX_GENERATOR:-}"; then
+    return 0
+  fi
+
+  local fund_amount="${1:?}"
+  _fund_tx_generator "$(<"${STATE_CLUSTER}/shelley/genesis-utxo2.addr")" "$fund_amount"
+
+  _gen_tx_generator_config \
+    "${STATE_CLUSTER}/topology-bft1.json" \
+    "./pool1.socket" \
+    "./config-pool1.json" \
+    "./shelley/genesis-utxo2.skey" > "${STATE_CLUSTER}/tx-generator-config.json"
+
+  echo "Starting tx-generator"
+  supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH:?}" start tx_generator
 }

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if ! command -v cardano-submit-api &> /dev/null; then
+  echo "cardano-submit-api is not available in PATH" >&2
+  exit 1
+fi
+
 testnet_magic="$(<./state-cluster%%INSTANCE_NUM%%/db-bft1/protocolMagicId)"
 
 echo "Starting cardano-submit-api with PID $$: cardano-submit-api"
