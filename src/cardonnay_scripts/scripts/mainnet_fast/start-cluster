@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR="$(readlink -m "${0%/*}")"
+export AUTORESTART_NODES="${AUTORESTART_NODES:-true}"
 exec "${SCRIPT_DIR}/common-start-fast" "$@"

@@ -170,47 +170,6 @@ class LocalScripts:
         }
         return topology
 
-    def _gen_supervisor_conf(self, instance_num: int, instance_ports: InstancePorts) -> str:
-        """Generate supervisor configuration for given instance."""
-        lines = [
-            "# [inet_http_server]",
-            f"# port=127.0.0.1:{instance_ports.supervisor}",
-        ]
-
-        programs = []
-        for node_rec in instance_ports.node_ports:
-            node_name = "bft1" if node_rec.num == 0 else f"pool{node_rec.num}"
-
-            programs.append(node_name)
-
-            lines.extend(
-                [
-                    f"\n[program:{node_name}]",
-                    f"command=./state-cluster{instance_num}/cardano-node-{node_name}",
-                    f"stderr_logfile=./state-cluster{instance_num}/{node_name}.stderr",
-                    f"stdout_logfile=./state-cluster{instance_num}/{node_name}.stdout",
-                    "startsecs=5",
-                ]
-            )
-
-        lines.extend(
-            [
-                "\n[group:nodes]",
-                f"programs={','.join(programs)}",
-                "\n[program:webserver]",
-                f"command=python -m http.server --bind 127.0.0.1 {instance_ports.webserver}",
-                f"directory=./state-cluster{instance_num}/webserver",
-                "\n[rpcinterface:supervisor]",
-                "supervisor.rpcinterface_factory=supervisor.rpcinterface:make_main_rpcinterface",
-                "\n[supervisorctl]",
-                "\n[supervisord]",
-                f"logfile=./state-cluster{instance_num}/supervisord.log",
-                f"pidfile=./state-cluster{instance_num}/supervisord.pid",
-            ]
-        )
-
-        return "\n".join(lines)
-
     def _gen_topology_files(
         self, destdir: pl.Path, addr: str, nodes: tp.Sequence[NodePorts]
     ) -> None:
@@ -265,15 +224,15 @@ class LocalScripts:
         # Generate config and topology files from templates
         for node_rec in instance_ports.node_ports:
             if node_rec.num != 0:
-                supervisor_script = destdir / f"cardano-node-pool{node_rec.num}"
-                supervisor_script_content = self._replace_node_template(
+                run_script = destdir / f"cardano-node-pool{node_rec.num}"
+                run_script_content = self._replace_node_template(
                     template_file=indir / "template-cardano-node-pool",
                     node_rec=node_rec,
                     instance_num=instance_num,
                 )
-                supervisor_script.unlink(missing_ok=True)
-                supervisor_script.write_text(f"{supervisor_script_content}\n", encoding="utf-8")
-                supervisor_script.chmod(0o755)
+                run_script.unlink(missing_ok=True)
+                run_script.write_text(f"{run_script_content}\n", encoding="utf-8")
+                run_script.chmod(0o755)
 
             node_name = "bft1" if node_rec.num == 0 else f"pool{node_rec.num}"
             node_config = destdir / f"config-{node_name}.json"
@@ -286,13 +245,6 @@ class LocalScripts:
             node_config.write_text(f"{node_config_content}\n", encoding="utf-8")
 
         self._gen_topology_files(destdir=destdir, addr=addr, nodes=instance_ports.node_ports)
-
-        supervisor_conf_file = destdir / "supervisor.conf"
-        supervisor_conf_content = self._gen_supervisor_conf(
-            instance_num=instance_num, instance_ports=instance_ports
-        )
-        supervisor_conf_file.unlink(missing_ok=True)
-        supervisor_conf_file.write_text(f"{supervisor_conf_content}\n", encoding="utf-8")
 
     def prepare_scripts_files(
         self,

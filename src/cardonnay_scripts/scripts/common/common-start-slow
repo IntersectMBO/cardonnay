@@ -1140,7 +1140,7 @@ hf_to_conway_pv11() {
 main() {
   initialize_globals
   setup_state_cluster "${STATE_CLUSTER}/shelley"
-  configure_supervisor
+  configure_supervisor "${AUTORESTART_NODES:-false}"
   create_genesis
   create_committee_keys_in_genesis
   create_genesis_utxos

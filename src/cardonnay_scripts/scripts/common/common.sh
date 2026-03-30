@@ -205,14 +205,41 @@ save_protocol_params() {
 }
 
 configure_supervisor() {
-  cat >> "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
+  local autorestart_nodes="${1:-false}"
+  if is_truthy "$autorestart_nodes"; then
+    autorestart_nodes="true"
+  else
+    autorestart_nodes="false"
+  fi
 
+  local -a node_names=()
+  local i
+  for i in $(seq 1 "${NUM_BFT_NODES:?}"); do
+    node_names+=("bft${i}")
+  done
+  for i in $(seq 1 "${NUM_POOLS:?}"); do
+    node_names+=("pool${i}")
+  done
+
+  cat > "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
 [unix_http_server]
 file = ${SUPERVISORD_SOCKET_PATH:?}
 
 [supervisorctl]
 serverurl = unix:///${SUPERVISORD_SOCKET_PATH:?}
 EoF
+
+  for node_name in "${node_names[@]}"; do
+    cat >> "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
+
+[program:${node_name}]
+command=./${STATE_CLUSTER_NAME:?}/cardano-node-${node_name}
+stderr_logfile=./${STATE_CLUSTER_NAME:?}/${node_name}.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME:?}/${node_name}.stdout
+autorestart=${autorestart_nodes}
+startsecs=5
+EoF
+  done
 
   if [ -n "${DBSYNC_SCHEMA_DIR:-}" ]; then
     command -v cardano-db-sync > /dev/null 2>&1 || \
@@ -222,14 +249,14 @@ EoF
       "${SCRIPT_DIR:?}/postgres-setup.sh"
     fi
 
-    cp "${SCRIPT_DIR:?}/run-cardano-dbsync" "$STATE_CLUSTER"
+    cp "${SCRIPT_DIR:?}/run-cardano-dbsync" "${STATE_CLUSTER:?}"
 
     cat >> "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
 
 [program:dbsync]
 command=./${STATE_CLUSTER_NAME:?}/run-cardano-dbsync
-stderr_logfile=./${STATE_CLUSTER_NAME}/dbsync.stderr
-stdout_logfile=./${STATE_CLUSTER_NAME}/dbsync.stdout
+stderr_logfile=./${STATE_CLUSTER_NAME:?}/dbsync.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME:?}/dbsync.stdout
 autostart=false
 autorestart=false
 startsecs=5
@@ -240,14 +267,14 @@ EoF
     command -v cardano-smash-server > /dev/null 2>&1 || \
       { echo "The \`cardano-smash-server\` binary not found, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 
-    cp "${SCRIPT_DIR:?}/run-cardano-smash" "$STATE_CLUSTER"
+    cp "${SCRIPT_DIR:?}/run-cardano-smash" "${STATE_CLUSTER:?}"
 
     cat >> "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
 
 [program:smash]
-command=./${STATE_CLUSTER_NAME}/run-cardano-smash
-stderr_logfile=./${STATE_CLUSTER_NAME}/smash.stderr
-stdout_logfile=./${STATE_CLUSTER_NAME}/smash.stdout
+command=./${STATE_CLUSTER_NAME:?}/run-cardano-smash
+stderr_logfile=./${STATE_CLUSTER_NAME:?}/smash.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME:?}/smash.stdout
 autostart=false
 autorestart=false
 startsecs=5
@@ -258,9 +285,9 @@ EoF
     cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
 [program:submit_api]
-command=./${STATE_CLUSTER_NAME}/run-cardano-submit-api
-stderr_logfile=./${STATE_CLUSTER_NAME}/submit_api.stderr
-stdout_logfile=./${STATE_CLUSTER_NAME}/submit_api.stdout
+command=./${STATE_CLUSTER_NAME:?}/run-cardano-submit-api
+stderr_logfile=./${STATE_CLUSTER_NAME:?}/submit_api.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME:?}/submit_api.stdout
 autostart=false
 autorestart=false
 startsecs=5
@@ -270,17 +297,34 @@ EoF
   if is_truthy "${ENABLE_TX_GENERATOR:-}"; then
     cp "${SCRIPT_DIR:?}/run-tx-generator" "$STATE_CLUSTER"
 
-    cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
+    cat >> "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
 
 [program:tx_generator]
-command=./${STATE_CLUSTER_NAME}/run-tx-generator
-stderr_logfile=./${STATE_CLUSTER_NAME}/tx-generator.stderr
-stdout_logfile=./${STATE_CLUSTER_NAME}/tx-generator.stdout
+command=./${STATE_CLUSTER_NAME:?}/run-tx-generator
+stderr_logfile=./${STATE_CLUSTER_NAME:?}/tx-generator.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME:?}/tx-generator.stdout
 autostart=false
 autorestart=false
 startsecs=5
 EoF
   fi
+
+  cat >> "${STATE_CLUSTER:?}/supervisor.conf" <<EoF
+
+[group:nodes]
+programs=$(IFS=,; echo "${node_names[*]}")
+
+[program:webserver]
+command=python -m http.server --bind 127.0.0.1 ${WEBSERVER_PORT:?}
+directory=./${STATE_CLUSTER_NAME:?}/webserver
+
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory=supervisor.rpcinterface:make_main_rpcinterface
+
+[supervisord]
+logfile=./${STATE_CLUSTER_NAME:?}/supervisord.log
+pidfile=./${STATE_CLUSTER_NAME:?}/supervisord.pid
+EoF
 }
 
 create_cluster_scripts() {
@@ -419,7 +463,6 @@ setup_state_cluster() {
   cp "${SCRIPT_DIR}/byron-params.json" "$STATE_CLUSTER"
   cp "${SCRIPT_DIR}/dbsync-config.yaml" "$STATE_CLUSTER"
   cp "${SCRIPT_DIR}/submit-api-config.json" "$STATE_CLUSTER"
-  cp "${SCRIPT_DIR}/supervisor.conf" "$STATE_CLUSTER"
   cp "$SCRIPT_DIR/testnet.json" "$STATE_CLUSTER"
   cp "$SCRIPT_DIR"/*genesis*.spec.json "$genesis_init_dir"
   cp "$SCRIPT_DIR"/cost_models*.json "$genesis_init_dir" 2>/dev/null || true
