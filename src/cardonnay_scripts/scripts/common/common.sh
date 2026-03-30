@@ -723,7 +723,7 @@ _gen_tx_generator_config() {
       targetNodes: [
         $topology.localRoots[].accessPoints[] |
         {
-          addr: .address,
+          addr: "127.0.0.1",
           port: .port,
           name: ("node" + (.port | tostring))
         }
