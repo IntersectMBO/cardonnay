@@ -2,4 +2,5 @@
 
 SCRIPT_DIR="$(readlink -m "${0%/*}")"
 export AUTORESTART_NODES="${AUTORESTART_NODES:-true}"
+export SUBMIT_DELAY="${SUBMIT_DELAY:-15}"
 exec "${SCRIPT_DIR}/common-start-fast" "$@"
