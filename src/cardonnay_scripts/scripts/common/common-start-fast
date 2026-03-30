@@ -250,7 +250,7 @@ edit_node_configs() {
 create_bft_nodes_files() {
   local i bft_port
 
-  for i in $(seq 1 "$NUM_BFT_NODES"); do
+  for ((i=1; i<="${NUM_BFT_NODES:?}"; i++)); do
     mkdir -p "${STATE_CLUSTER}/nodes/node-bft$i"
     bft_port="$((NODE_PORT_BASE + (i - 1) * PORTS_PER_NODE ))"
     echo "$bft_port" > "${STATE_CLUSTER}/nodes/node-bft${i}/port"
@@ -343,7 +343,7 @@ _create_pool_registration() {
 
 create_pools_files() {
   local i
-  for i in $(seq 1 "$NUM_POOLS"); do
+  for ((i=1; i<="${NUM_POOLS:?}"; i++)); do
     _create_pool_node_keys "$i"
     create_pool_metadata "$i"
     _create_pool_registration "$i"
@@ -383,7 +383,7 @@ register_entities_in_conway() {
   local -a pool_args=()
   local -a pool_signing=()
   local i
-  for i in $(seq 1 "$NUM_POOLS"); do
+  for ((i=1; i<="${NUM_POOLS:?}"; i++)); do
     pool_args+=( \
       "--tx-out" "$(<"${STATE_CLUSTER}/nodes/node-pool${i}/owner.addr")+${POOL_PLEDGE}" \
       "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/stake.reg.cert" \
@@ -413,7 +413,7 @@ register_entities_in_conway() {
 
   local -a dreps_args=()
   local -a dreps_signing=()
-  for i in $(seq 1 "$NUM_DREPS"); do
+  for ((i=1; i<="${NUM_DREPS:?}"; i++)); do
     dreps_args+=( \
       "--tx-out" "$(<"${STATE_CLUSTER}/governance_data/vote_stake_addr${i}.addr")+${DREP_DELEGATED}" \
       "--certificate-file" "${STATE_CLUSTER}/governance_data/default_drep_${i}_drep_reg.cert" \

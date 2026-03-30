@@ -229,7 +229,7 @@ edit_node_configs() {
 create_bft_nodes_files() {
   local i index bft_port
 
-  for i in $(seq 1 "$NUM_BFT_NODES"); do
+  for ((i=1; i<="${NUM_BFT_NODES:?}"; i++)); do
     mkdir -p "${STATE_CLUSTER}/nodes/node-bft$i"
     ln -s "../../shelley/delegate-keys/delegate${i}.vrf.skey" "${STATE_CLUSTER}/nodes/node-bft${i}/vrf.skey"
     ln -s "../../shelley/delegate-keys/delegate${i}.vrf.vkey" "${STATE_CLUSTER}/nodes/node-bft${i}/vrf.vkey"
@@ -409,7 +409,7 @@ _create_pool_registration() {
 
 create_pools_files() {
   local i
-  for i in $(seq 1 "$NUM_POOLS"); do
+  for ((i=1; i<="${NUM_POOLS:?}"; i++)); do
     _create_pool_node_keys "$i"
     create_pool_metadata "$i"
     _create_pool_registration "$i"
@@ -461,7 +461,7 @@ submit_byron_proposal_with_votes() {
     --filepath "$proposal_file"
   sleep 5
 
-  for i in $(seq 1 "$NUM_BFT_NODES"); do
+  for ((i=1; i<="${NUM_BFT_NODES:?}"; i++)); do
     cardano_cli_log byron governance create-proposal-vote \
       --proposal-filepath "$proposal_file" \
       --testnet-magic "$NETWORK_MAGIC" \
@@ -595,7 +595,7 @@ _register_governance_in_conway() {
 
   local -a dreps_args=()
   local -a dreps_signing=()
-  for i in $(seq 1 "$NUM_DREPS"); do
+  for ((i=1; i<="${NUM_DREPS:?}"; i++)); do
     dreps_args+=( \
       "--tx-out" "$(<"${STATE_CLUSTER}/governance_data/vote_stake_addr${i}.addr")+${DREP_DELEGATED}" \
       "--certificate-file" "${STATE_CLUSTER}/governance_data/default_drep_${i}_drep_reg.cert" \
@@ -611,7 +611,7 @@ _register_governance_in_conway() {
 
   local -a pool_args=()
   local -a pool_signing=()
-  for i in $(seq 1 "$NUM_POOLS"); do
+  for ((i=1; i<="${NUM_POOLS:?}"; i++)); do
     pool_args+=( \
       "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/stake-reward.vote_deleg.cert" \
     )
@@ -876,7 +876,7 @@ submit_byron_genesis_txs() {
 
   echo "Moving funds out of Byron genesis"
   local i
-  for i in $(seq 1 "$NUM_BFT_NODES"); do
+  for ((i=1; i<="${NUM_BFT_NODES:?}"; i++)); do
     cardano_cli_log byron transaction submit-tx \
       --testnet-magic "$NETWORK_MAGIC" \
       --tx "${STATE_CLUSTER}/byron/tx${i}.tx"
@@ -944,7 +944,7 @@ hf_to_allegra() {
   local -a pool_args=()
   local -a pool_signing=()
   local i
-  for i in $(seq 1 "$NUM_POOLS"); do
+  for ((i=1; i<="${NUM_POOLS:?}"; i++)); do
     pool_args+=( \
       "--tx-out" "$(<"${STATE_CLUSTER}/nodes/node-pool${i}/owner.addr")+${POOL_PLEDGE}" \
       "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/stake.reg.shelley.cert" \
