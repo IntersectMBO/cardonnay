@@ -11,8 +11,19 @@
     "ShelleyGenesisFile": "shelley/genesis.json",
     "AlonzoGenesisFile": "shelley/genesis.alonzo.json",
     "ConwayGenesisFile": "shelley/genesis.conway.json",
-    "TraceOptions": {},
-    "UseTraceDispatcher": false,
+    "TraceOptions": {
+        "": {
+            "backends": [
+                "EKGBackend",
+                "PrometheusSimple %%PROMETHEUS_PORT%%",
+                "Stdout HumanFormatUncoloured"
+            ],
+            "detail": "DNormal",
+            "severity": "Info"
+        }
+    },
+    "TraceOptionResourceFrequency": 5000,
+    "UseTraceDispatcher": true,
     "TraceBlockFetchClient": false,
     "TraceBlockFetchDecisions": false,
     "TraceBlockFetchProtocol": false,
