@@ -2,7 +2,7 @@
   description = "Cardonnay - Cardano local testnets";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     cardano-node = {
       url = "github:IntersectMBO/cardano-node";
     };
@@ -17,8 +17,6 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           nodePkgs = cardano-node.packages.${system};
-          py3Pkgs = pkgs.python311Packages;
-          py3Full = pkgs.python311Full;
         in
         {
           devShells = rec {
@@ -34,9 +32,9 @@
                 nodePkgs.cardano-node
                 nodePkgs.cardano-submit-api
                 nodePkgs.bech32
-                py3Full
-                py3Pkgs.virtualenv
-                py3Pkgs.pip
+                nodePkgs.tx-generator
+                pkgs.bashInteractive
+                pkgs.python313
               ];
               shellHook = ''
                 echo "Setting up environment..."
