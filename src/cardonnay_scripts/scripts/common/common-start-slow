@@ -691,7 +691,7 @@ submit_gov_action() {
 
 create_and_submit_hf_action() {
   local hf_action="${1:?}"
-  local era="${2:?}"
+  local cmdgroup="${2:?}"
   local major_version="${3:?}"
   local prev_txid="${4:-}"
   local prev_index="${5:-0}"
@@ -704,7 +704,7 @@ create_and_submit_hf_action() {
     )
   fi
 
-  cardano_cli_log "$era" governance action create-hardfork \
+  cardano_cli_log "$cmdgroup" governance action create-hardfork \
     --testnet \
     --governance-action-deposit "$GOV_ACTION_DEPOSIT" \
     --deposit-return-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool1/reward.vkey" \
@@ -1137,6 +1137,41 @@ hf_to_conway_pv11() {
   [ "$cur_protver" = 11 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 }
 
+hf_to_dijkstra() {
+  if [ "$PROTOCOL_VERSION" -lt 12 ]; then
+    echo "Skipping HF to Dijkstra PV12 as PROTOCOL_VERSION is set to $PROTOCOL_VERSION"
+    return
+  fi
+
+  local cur_epoch="${1:?}"
+
+  echo "Submitting hard fork proposal to update to Dijkstra PV12"
+
+  local pv12_hf_base="${STATE_CLUSTER}/governance_data/hardfork_pv12_action"
+  local pv12_hf_action="${pv12_hf_base}_action"
+
+  create_and_submit_hf_action "$pv12_hf_action" "latest" 12 "${PV11_HF_ACTION_TXID:?"Must exist"}"
+
+  PV12_HF_ACTION_TXID="$(cardano_cli_log conway transaction txid \
+    --output-text --tx-body-file "${pv12_hf_action}-tx.txbody")"
+  readonly PV12_HF_ACTION_TXID
+
+  vote_on_action "$PV12_HF_ACTION_TXID" "$pv12_hf_action" "yes" "yes"
+  submit_votes "${pv12_hf_base}_votes" "$pv12_hf_action"
+
+  echo "Waiting for Dijkstra PV12 to start"
+  wait_for_epoch "$((cur_epoch + 2))"
+
+  save_protocol_params "$PPARAMS_FILE"
+  local cur_protver
+  cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
+  [ "$cur_protver" = 12 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+
+  local cur_era
+  cur_era="$(get_era)"
+  [ "$cur_era" = "Dijkstra" ] || { echo "Unexpected era '$cur_era' after HF to Dijkstra PV12, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+}
+
 main() {
   initialize_globals
   setup_state_cluster "${STATE_CLUSTER}/shelley"
@@ -1169,6 +1204,7 @@ main() {
   hf_to_conway "$(get_epoch)"
   hf_to_conway_pv10 "$(get_epoch)"
   hf_to_conway_pv11 "$(get_epoch)"
+  hf_to_dijkstra "$(get_epoch)"
 
   use_genesis_mode
 
