@@ -121,6 +121,25 @@ get_era() {
   cardano_cli_log latest query tip --testnet-magic "${NETWORK_MAGIC:?}" | jq -r '.era'
 }
 
+get_node_version() {
+  local _first second major minor patch _
+  read -r _first second _ < <(cardano-node --version 2>/dev/null)
+  [ -n "$second" ] || return 1
+  IFS=. read -r major minor patch <<< "$second"
+  # Strip any non-digit suffix per component (e.g. "11.0.0-pre" -> "11.0.0")
+  printf '%s.%s.%s\n' "${major%%[!0-9]*}" "${minor%%[!0-9]*}" "${patch%%[!0-9]*}"
+}
+
+version_parse() {
+  local v="${1:?"Missing version"}"
+  local major minor patch
+  IFS=. read -r major minor patch <<< "$v"
+  major="${major%%[!0-9]*}"
+  minor="${minor%%[!0-9]*}"
+  patch="${patch%%[!0-9]*}"
+  printf '%d\n' "$((10#${major:-0} * 1000000 + 10#${minor:-0} * 1000 + 10#${patch:-0}))"
+}
+
 get_sec_to_epoch_end() {
   cardano_cli_log latest query tip --testnet-magic "${NETWORK_MAGIC:?}" |
     jq -r "$(get_slot_length) * .slotsToEpochEnd | ceil"
@@ -549,21 +568,35 @@ create_committee_keys_in_genesis() {
 
 edit_genesis_conf() {
   local conf="${1:?"Missing node config file"}"
+  local node_ver node_v11
+  node_ver="$(version_parse "$(get_node_version || echo 0.0.0)")"
+  node_v11="$(version_parse 11.0.0)"
 
   jq \
     --arg byron_hash "${BYRON_GENESIS_HASH:?}" \
     --arg shelley_hash "${SHELLEY_GENESIS_HASH:?}" \
     --arg alonzo_hash "${ALONZO_GENESIS_HASH:?}" \
     --arg conway_hash "${CONWAY_GENESIS_HASH:?}" \
-    --arg dijkstra_hash "${DIJKSTRA_GENESIS_HASH:-}" '
+    --arg dijkstra_hash "${DIJKSTRA_GENESIS_HASH:-}" \
+    --argjson prot_ver "${PROTOCOL_VERSION:?}" \
+    --argjson node_ver "$node_ver" \
+    --argjson node_v11 "$node_v11" \
+    --argjson enable_experimental "$(is_truthy "${ENABLE_EXPERIMENTAL:-}" && echo true || echo false)" '
     .ByronGenesisHash = $byron_hash
     | .ShelleyGenesisHash = $shelley_hash
     | .AlonzoGenesisHash = $alonzo_hash
     | .ConwayGenesisHash = $conway_hash
     | if $dijkstra_hash != "" then
         (.DijkstraGenesisFile = "shelley/genesis.dijkstra.json"
-          | .DijkstraGenesisHash = $dijkstra_hash
-          | .ExperimentalProtocolsEnabled = true
+          | .DijkstraGenesisHash = $dijkstra_hash)
+      else
+        .
+      end
+    | if $enable_experimental
+        or ($prot_ver >= 11 and $node_ver < $node_v11)
+        or ($prot_ver >= 12 and $node_ver >= $node_v11)
+      then
+        (.ExperimentalProtocolsEnabled = true
           | .ExperimentalHardForksEnabled = true)
       else
         .
