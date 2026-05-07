@@ -15,6 +15,11 @@ EnableFutureGenesis: True
 # The path to the node config file is relative to this config file.
 NodeConfigFile: config-bft1.json
 
+# Off-chain metadata fetchers default to "disable" since 13.7.0.3 (even under preset "full"); enable explicitly.
+insert_options:
+  offchain_pool_data: "enable"
+  offchain_vote_data: "enable"
+
 # ------------------------------------------------------------------------------
 # Logging configuration follows.
 
