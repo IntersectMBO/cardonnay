@@ -1,22 +1,38 @@
 .DEFAULT_GOAL := help
 
+PIP_INSTALL_ARGS ?=
 VENV := .venv
 PIP := $(VENV)/bin/pip
-PIP_INSTALL_ARGS ?=
 
 .PHONY: .check-venv-exists
 .check-venv-exists:
 	@if [ ! -d "$(VENV)" ]; then \
-		echo "Error: Virtual environment not found. Please run 'make install' first."; \
+		echo "Error: Virtual environment not found. Please run 'make install' first." >&2; \
 		exit 1; \
 	fi
 
 .PHONY: .check-venv-activated
 .check-venv-activated:
-	@if [ -z "${VIRTUAL_ENV}" ] || [ "${VIRTUAL_ENV}" != "$(abspath $(VENV))" ]; then \
-		echo "Error: Virtual environment not activated. Please run 'source $(VENV)/bin/activate' first."; \
-		exit 1; \
-	fi
+	@venv_abs="$$(readlink -f -- "$(CURDIR)/$(VENV)" 2>/dev/null || echo "$(CURDIR)/$(VENV)")"; \
+		actual="$$(readlink -f -- "$${VIRTUAL_ENV:-}" 2>/dev/null || echo "$${VIRTUAL_ENV:-}")"; \
+		if [ -z "$${VIRTUAL_ENV:-}" ]; then \
+			echo "Error: Virtual environment not activated. Please run 'source $(VENV)/bin/activate' first." >&2; \
+			exit 1; \
+		elif [ "$$actual" != "$$venv_abs" ]; then \
+			echo "Error: Wrong virtual environment is activated. Please run 'source $(VENV)/bin/activate'." >&2; \
+			echo "Expected: $$venv_abs" >&2; \
+			echo "Actual:   $$actual" >&2; \
+			exit 1; \
+		fi
+
+.PHONY: .check-venv-not-activated
+.check-venv-not-activated:
+	@venv_abs="$$(readlink -f -- "$(CURDIR)/$(VENV)" 2>/dev/null || echo "$(CURDIR)/$(VENV)")"; \
+		actual="$$(readlink -f -- "$${VIRTUAL_ENV:-}" 2>/dev/null || echo "$${VIRTUAL_ENV:-}")"; \
+		if [ -n "$${VIRTUAL_ENV:-}" ] && [ "$$actual" = "$$venv_abs" ]; then \
+			echo "Error: Project virtual environment is currently activated. Please deactivate it first." >&2; \
+			exit 1; \
+		fi
 
 ## ---------------------------------------------------------------------------
 ## Setup
@@ -24,10 +40,12 @@ PIP_INSTALL_ARGS ?=
 
 .PHONY: install
 install: ## Install cardonnay and its dependencies into a virtual environment
-	@if [ -n "${VIRTUAL_ENV}" ] && [ "${VIRTUAL_ENV}" != "$(abspath $(VENV))" ]; then \
-		echo "Error: Another virtual environment is currently activated. Please deactivate it before running 'make install'."; \
-		exit 1; \
-	fi
+	@venv_abs="$$(readlink -f -- "$(CURDIR)/$(VENV)" 2>/dev/null || echo "$(CURDIR)/$(VENV)")"; \
+		actual="$$(readlink -f -- "$${VIRTUAL_ENV:-}" 2>/dev/null || echo "$${VIRTUAL_ENV:-}")"; \
+		if [ -n "$${VIRTUAL_ENV:-}" ] && [ "$$actual" != "$$venv_abs" ]; then \
+			echo "Error: Another virtual environment is currently activated. Please deactivate it before running 'make install'." >&2; \
+			exit 1; \
+		fi
 	@if [ ! -x "$(VENV)/bin/python3" ]; then \
 		python3 -m venv $(VENV); \
 	fi
@@ -61,8 +79,11 @@ build: .check-venv-exists ## Build package distributions
 	$(VENV)/bin/python3 -m build
 
 .PHONY: upload
-upload: .check-venv-activated ## Upload package distributions to PyPI
-	if ! command -v twine >/dev/null 2>&1; then $(PIP) install --require-virtualenv --upgrade twine; fi
+upload: ## Upload package distributions to PyPI
+	@if ! command -v twine >/dev/null 2>&1; then \
+		echo "Error: 'twine' is not installed. Please install it in your system, or in your virtual environment with 'pip install twine'." >&2; \
+		exit 1; \
+	fi
 	twine upload --skip-existing dist/*
 
 .PHONY: release
@@ -81,7 +102,7 @@ clean: ## Clean build artifacts and caches
 	find . -name '*.pyc' -not -path './$(VENV)/*' -delete
 
 .PHONY: clean-all
-clean-all: clean ## Clean all build artifacts, caches, and virtual environment
+clean-all: .check-venv-not-activated clean ## Clean all build artifacts, caches, and virtual environment
 	@echo "Removing virtual environment: $(VENV)"
 	rm -rf -- "$(VENV)"
 
