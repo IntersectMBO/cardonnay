@@ -122,15 +122,14 @@ get_era() {
 }
 
 get_node_version() {
-  local _first second major minor patch _
-  read -r _first second _ < <(cardano-node --version 2>/dev/null)
-  [ -n "$second" ] || return 1
-  IFS=. read -r major minor patch <<< "$second"
-  # Strip any non-digit suffix per component (e.g. "11.0.0-pre" -> "11.0.0")
-  printf '%s.%s.%s\n' "${major%%[!0-9]*}" "${minor%%[!0-9]*}" "${patch%%[!0-9]*}"
+  local version _
+  read -r _ version _ < <(cardano-node --version 2>/dev/null)
+  [ -n "$version" ] || return 1
+  printf '%s\n' "$version"
 }
 
 version_parse() {
+  # Limitation: minor and patch must be < 1000, else they overflow into the next field.
   local v="${1:?"Missing version"}"
   local major minor patch
   IFS=. read -r major minor patch <<< "$v"
