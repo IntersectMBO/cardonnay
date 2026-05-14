@@ -27,16 +27,30 @@ if [ ! -f "$PID_FILE" ]; then
   exit 0
 fi
 
-PID="$(<"$PID_FILE")"
-for _ in {1..5}; do
+kill_supervisor() {
+  PID="$(<"$PID_FILE")" || return 1
+  if ! kill -0 "$PID" 2>/dev/null; then
+    return 0
+  fi
   if ! kill "$PID"; then
-    break
+    kill -0 "$PID" 2>/dev/null || return 0
+    return 1
   fi
-  sleep 1
-  if [ ! -f "$PID_FILE" ]; then
-    break
-  fi
-done
+  for _ in {1..5}; do
+    if ! kill -0 "$PID" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Warning: process $PID did not exit after SIGTERM, sending SIGKILL." >&2
+  kill -9 "$PID" 2>/dev/null || true
+  kill -0 "$PID" 2>/dev/null && return 1
+  return 0
+}
 
+if ! kill_supervisor; then
+  echo "Failed to terminate cluster with PID $(<"$PID_FILE")" >&2
+  exit 1
+fi
 rm -f "$PID_FILE"
 echo "Cluster terminated!"
