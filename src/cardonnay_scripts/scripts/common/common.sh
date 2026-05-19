@@ -75,7 +75,7 @@ get_txins() {
                 --testnet-magic "${NETWORK_MAGIC:?}" \
                 --output-text \
                 --address "$txin_addr" |
-                grep -E "lovelace$|[0-9]$|lovelace \+ TxOutDatumNone$" || echo "")"
+                grep -E "lovelace$|[0-9]$|lovelace \+ TxOutDatumNone$|lovelace \+ NoDatum" || echo "")"
 
     if [ "$TXIN_AMOUNT" -ge "$stop_txin_amount" ]; then
       break
