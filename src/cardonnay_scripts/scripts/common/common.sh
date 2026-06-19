@@ -707,20 +707,20 @@ _fund_tx_gen() {
 
   local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
 
-  cardano_cli_log conway transaction build-raw \
+  cardano_cli_log latest transaction build-raw \
     --fee    "$fee" \
     "${TXINS[@]}" \
     --tx-out "${addr}+${fund_amount}" \
     --tx-out "${FAUCET_ADDR}+${txout_amount}" \
     --out-file "${tx_base}-tx.txbody"
 
-  cardano_cli_log conway transaction sign \
+  cardano_cli_log latest transaction sign \
     --signing-key-file "${FAUCET_SKEY:?}" \
     --testnet-magic    "${NETWORK_MAGIC:?}" \
     --tx-body-file     "${tx_base}-tx.txbody" \
     --out-file         "${tx_base}-tx.tx"
 
-  cardano_cli_log conway transaction submit \
+  cardano_cli_log latest transaction submit \
     --tx-file "${tx_base}-tx.tx" \
     --testnet-magic "${NETWORK_MAGIC:?}"
 
