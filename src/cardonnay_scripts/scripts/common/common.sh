@@ -754,8 +754,8 @@ _create_tx_gen_config() {
     --arg skey "$skey_file" \
     '{
       debugMode: false,
-      tx_count: 50000,
-      tps: 30,
+      tx_count: 150000,
+      tps: 100,
       inputs_per_tx: 2,
       outputs_per_tx: 2,
       tx_fee: 212345,
@@ -824,7 +824,7 @@ setup_tx_generator() {
   get_epoch_sec > /dev/null
   if [ "$EPOCH_SEC" -gt 3600 ]; then
     has_long_epoch_sec=true
-    tx_count=150000
+    tx_count=250000
   fi
 
   _create_tx_gen_config \
