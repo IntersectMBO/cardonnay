@@ -11,6 +11,7 @@ readonly TX_SUBMISSION_DELAY=60
 readonly SUBMIT_DELAY="${SUBMIT_DELAY:-5}"
 readonly POOL_PLEDGE=1000000000000
 readonly DREP_DELEGATED=500000000000
+readonly FEE=5000000
 readonly BYRON_INIT_SUPPLY=10020000000
 readonly TX_GENERATOR_MIN_FUNDS=5000000000000000
 
@@ -19,6 +20,13 @@ readonly NUM_POOLS=%%NUM_POOLS%%
 readonly NODE_PORT_BASE=%%NODE_PORT_BASE%%
 readonly PORTS_PER_NODE=%%PORTS_PER_NODE%%
 readonly WEBSERVER_PORT=%%WEBSERVER_PORT%%
+
+# TODO: cannot hf directly to Dijkstra yet
+TMP_PROTOCOL_VERSION="$PROTOCOL_VERSION"
+if [ "$PROTOCOL_VERSION" -ge 12 ]; then
+  TMP_PROTOCOL_VERSION=11
+fi
+readonly TMP_PROTOCOL_VERSION
 
 initialize_globals() {
   if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
@@ -40,6 +48,7 @@ initialize_globals() {
   readonly STATE_CLUSTER_NAME="${STATE_CLUSTER##*/}"
   readonly SUPERVISORD_SOCKET_PATH="${STATE_CLUSTER}/supervisord.sock"
   readonly START_CLUSTER_STATUS="${STATE_CLUSTER}/status_started"
+  readonly PPARAMS_FILE="${STATE_CLUSTER}/pparams.json"
 
   if [[ "$SOCKET_PATH" != *"/state-cluster${INSTANCE_NUM}/"* ]]; then
     echo "CARDANO_NODE_SOCKET_PATH must be set to a path containing 'state-cluster${INSTANCE_NUM}', line $LINENO in ${BASH_SOURCE[0]}" >&2
@@ -146,7 +155,7 @@ create_genesis() {
 
   jq \
     --argjson max_supply "$MAX_SUPPLY" \
-    --argjson prot_ver "$PROTOCOL_VERSION" '
+    --argjson prot_ver "$TMP_PROTOCOL_VERSION" '
     .protocolParams.protocolVersion.major = $prot_ver
     | .maxLovelaceSupply = $max_supply
     ' "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
@@ -173,6 +182,8 @@ get_genesis_data() {
   DREP_DEPOSIT="$(jq '.dRepDeposit' \
     < "${STATE_CLUSTER}/shelley/genesis.conway.json")"
   readonly DREP_DEPOSIT
+  GOV_ACTION_DEPOSIT="$(jq '.govActionDeposit' < "${STATE_CLUSTER}/shelley/genesis.conway.json")"
+  readonly GOV_ACTION_DEPOSIT
 
   BYRON_GENESIS_HASH="$(cardano_cli_log byron genesis print-genesis-hash --genesis-json \
     "${STATE_CLUSTER}/byron/genesis.json")"
@@ -233,7 +244,7 @@ edit_node_configs() {
     fi
 
     jq \
-      --argjson prot_ver "$PROTOCOL_VERSION" '
+      --argjson prot_ver "$TMP_PROTOCOL_VERSION" '
       if $prot_ver >= 12 then
         .TestDijkstraHardForkAtEpoch = 0
       else
@@ -350,11 +361,20 @@ create_pools_files() {
   done
 }
 
-register_entities_in_conway() {
+register_entities() {
   echo "Sleeping for initial Tx submission delay of $TX_SUBMISSION_DELAY seconds"
   sleep "$TX_SUBMISSION_DELAY"
 
   echo "Re-registering pools, creating CC members and DReps"
+
+  local command_era="conway"
+  if save_protocol_params "$PPARAMS_FILE"; then
+    local cur_protver
+    cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
+    if [ "$cur_protver" -ge 12 ]; then
+      command_era="dijkstra"
+    fi
+  fi
 
   local -a genesis_signing=()
   local skey
@@ -429,7 +449,7 @@ register_entities_in_conway() {
 
   local witness_count="$((${#pool_signing[@]} + ${#genesis_signing[@]} + ${#delegate_signing[@]} + ${#cc_signing[@]} + ${#dreps_signing[@]} + 1))"
 
-  cardano_cli_log conway transaction build \
+  cardano_cli_log "$command_era" transaction build \
     "${TXINS[@]}" \
     --change-address   "$FAUCET_ADDR" \
     "${pool_args[@]}" \
@@ -439,7 +459,7 @@ register_entities_in_conway() {
     --testnet-magic    "$NETWORK_MAGIC" \
     --out-file         "${STATE_CLUSTER}/shelley/transfer-register-delegate-tx.txbody"
 
-  cardano_cli_log conway transaction sign \
+  cardano_cli_log "$command_era" transaction sign \
     "${pool_signing[@]}" \
     "${genesis_signing[@]}" \
     "${delegate_signing[@]}" \
@@ -450,7 +470,7 @@ register_entities_in_conway() {
     --tx-body-file     "${STATE_CLUSTER}/shelley/transfer-register-delegate-tx.txbody" \
     --out-file         "${STATE_CLUSTER}/shelley/transfer-register-delegate-tx.tx"
 
-  cardano_cli_log conway transaction submit \
+  cardano_cli_log "$command_era" transaction submit \
     --tx-file "${STATE_CLUSTER}/shelley/transfer-register-delegate-tx.tx" \
     --testnet-magic "$NETWORK_MAGIC"
 
@@ -462,11 +482,48 @@ register_entities_in_conway() {
 
   if ! is_truthy "${NO_CC:-}"; then
     local cc_size
-    cc_size="$(cardano-cli conway query committee-state --active --testnet-magic "$NETWORK_MAGIC" |
+    cc_size="$(cardano-cli "$command_era" query committee-state --active --testnet-magic "$NETWORK_MAGIC" |
       grep -c '"status": "Active"')"
     [ "$cc_size" -ge "$NUM_CC" ] || \
       { echo "The CC members were not registered, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
   fi
+}
+
+hf_to_dijkstra() {
+  if [ "$PROTOCOL_VERSION" -lt 12 ]; then
+    echo "Skipping HF to Dijkstra PV12 as PROTOCOL_VERSION is set to $PROTOCOL_VERSION"
+    return
+  fi
+
+  echo "TODO: remove \`hf_to_dijkstra\` function once \`TestDijkstraHardForkAtEpoch\` fully works" >&2
+
+  local cur_epoch="${1:?}"
+
+  echo "Submitting hard fork proposal to update to Dijkstra PV12"
+
+  local pv12_hf_base="${STATE_CLUSTER}/governance_data/hardfork_pv12_action"
+  local pv12_hf_action="${pv12_hf_base}_action"
+
+  create_and_submit_hf_action "$pv12_hf_action" "latest" 12
+
+  PV12_HF_ACTION_TXID="$(cardano_cli_log conway transaction txid \
+    --output-text --tx-body-file "${pv12_hf_action}-tx.txbody")"
+  readonly PV12_HF_ACTION_TXID
+
+  vote_on_action "$PV12_HF_ACTION_TXID" "$pv12_hf_action" "yes" "yes"
+  submit_votes "${pv12_hf_base}_votes" "$pv12_hf_action"
+
+  echo "Waiting for Dijkstra PV12 to start"
+  wait_for_epoch "$((cur_epoch + 2))"
+
+  save_protocol_params "$PPARAMS_FILE"
+  local cur_protver
+  cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
+  [ "$cur_protver" = 12 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+
+  local cur_era
+  cur_era="$(get_era)"
+  [ "$cur_era" = "Dijkstra" ] || { echo "Unexpected era '$cur_era' after HF to Dijkstra PV12, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
 }
 
 main() {
@@ -484,7 +541,8 @@ main() {
   create_cluster_scripts
   start_cluster_nodes
   start_optional_services
-  register_entities_in_conway
+  register_entities
+  hf_to_dijkstra "$(get_epoch)"
   use_genesis_mode
   setup_tx_generator "$TX_GENERATOR_MIN_FUNDS"
 
