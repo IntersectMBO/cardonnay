@@ -45,7 +45,7 @@ check_spend_success() {
       --testnet-magic "${NETWORK_MAGIC:?}" --output-text | grep -q lovelace; then
       return 0
     fi
-    sleep 3
+    sleep 6
   done
   return 1
 }
