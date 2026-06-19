@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 
+# Optional env vars:
+#   DBSYNC_ALLOW_PRIVATE_OFFCHAIN_URLS - if truthy, start db-sync with
+#     `--allow-private-offchain-urls` so it can fetch off-chain anchor data
+#     served from localhost (pool / governance metadata on a local testnet).
+#     Off by default.
+
 set -uo pipefail
+
+is_truthy() {
+  local val="${1:-}"
+  case "${val,,}" in
+    1 | true | yes | on | enabled) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 retval=0
 
@@ -29,4 +43,15 @@ export PGHOST="${PGHOST:-localhost}"
 export PGPORT="${PGPORT:-5432}"
 export PGUSER="${PGUSER:-postgres}"
 
-exec cardano-db-sync --config "./$STATE_CLUSTER_NAME/dbsync-config.yaml" --socket-path "$CARDANO_NODE_SOCKET_PATH" --state-dir "./$STATE_CLUSTER_NAME/db-sync" --schema-dir "$DBSYNC_SCHEMA_DIR"
+args=(
+  --config "./$STATE_CLUSTER_NAME/dbsync-config.yaml"
+  --socket-path "$CARDANO_NODE_SOCKET_PATH"
+  --state-dir "./$STATE_CLUSTER_NAME/db-sync"
+  --schema-dir "$DBSYNC_SCHEMA_DIR"
+)
+
+if is_truthy "${DBSYNC_ALLOW_PRIVATE_OFFCHAIN_URLS:-}"; then
+  args+=(--allow-private-offchain-urls)
+fi
+
+exec cardano-db-sync "${args[@]}"
