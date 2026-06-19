@@ -45,7 +45,7 @@ check_spend_success() {
       --testnet-magic "${NETWORK_MAGIC:?}" --output-text | grep -q lovelace; then
       return 0
     fi
-    sleep 3
+    sleep 6
   done
   return 1
 }
@@ -220,6 +220,183 @@ save_protocol_params() {
   cardano_cli_log "$era" query protocol-parameters \
     --testnet-magic "${NETWORK_MAGIC:?}" \
     --out-file "$pparams_file"
+}
+
+submit_gov_action() {
+  local action_base="${1:?}"
+  local stop_txin_amount="$((${FEE:?} + ${GOV_ACTION_DEPOSIT:?}))"
+
+  get_txins "${FAUCET_ADDR:?}" "$stop_txin_amount"
+
+  local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
+
+  cardano_cli_log conway transaction build-raw \
+    --fee    "${FEE:?}" \
+    "${TXINS[@]}" \
+    --proposal-file "${action_base}.action" \
+    --tx-out "${FAUCET_ADDR:?}+${txout_amount}" \
+    --out-file "${action_base}-tx.txbody"
+
+  cardano_cli_log conway transaction sign \
+    --signing-key-file "${FAUCET_SKEY:?}" \
+    --testnet-magic    "${NETWORK_MAGIC:?}" \
+    --tx-body-file     "${action_base}-tx.txbody" \
+    --out-file         "${action_base}-tx.tx"
+
+  cardano_cli_log conway transaction submit \
+    --tx-file "${action_base}-tx.tx" \
+    --testnet-magic "${NETWORK_MAGIC:?}"
+
+  sleep "${SUBMIT_DELAY:?}"
+  if ! check_spend_success "${TXINS[@]}"; then
+    echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+}
+
+create_and_submit_hf_action() {
+  local hf_action="${1:?}"
+  local cmdgroup="${2:?}"
+  local major_version="${3:?}"
+  local prev_txid="${4:-}"
+  local prev_index="${5:-0}"
+
+  local -a prev_args=()
+  if [ -n "$prev_txid" ]; then
+    prev_args=( \
+      "--prev-governance-action-tx-id" "$prev_txid" \
+      "--prev-governance-action-index" "$prev_index" \
+    )
+  fi
+
+  cardano_cli_log "$cmdgroup" governance action create-hardfork \
+    --testnet \
+    --governance-action-deposit "${GOV_ACTION_DEPOSIT:?}" \
+    --deposit-return-stake-verification-key-file "${STATE_CLUSTER:?}/nodes/node-pool1/reward.vkey" \
+    "${prev_args[@]}" \
+    --anchor-url "http://www.hardfork-pv${major_version}.com" \
+    --anchor-data-hash 5d372dca1a4cc90d7d16d966c48270e33e3aa0abcb0e78f0d5ca7ff330d2245d \
+    --protocol-major-version "$major_version" \
+    --protocol-minor-version 0 \
+    --out-file "${hf_action}.action"
+
+  submit_gov_action "$hf_action"
+}
+
+vote_on_action() {
+  local action_txid="${1:?}"
+  local action_base="${2:?}"
+  local with_spos="${3:-no}"
+  local with_dreps="${4:-no}"
+  local f
+
+  echo "Voting on $(basename "$action_base") proposal"
+
+  local index=0
+  for f in "${STATE_CLUSTER:?}"/governance_data/cc_member*_committee_hot.vkey; do
+    [ -e "$f" ] || continue
+    index="$((index + 1))"
+    cardano_cli_log conway governance vote create \
+      --yes \
+      --governance-action-tx-id "$action_txid" \
+      --governance-action-index 0 \
+      --cc-hot-verification-key-file "$f" \
+      --out-file "${action_base}_cc${index}.vote"
+  done
+
+  if [ "$with_spos" = "yes" ]; then
+    index=0
+    for f in "${STATE_CLUSTER:?}"/nodes/node-pool*/cold.vkey; do
+      [ -e "$f" ] || continue
+      index="$((index + 1))"
+      cardano_cli_log conway governance vote create \
+        --yes \
+        --governance-action-tx-id "$action_txid" \
+        --governance-action-index 0 \
+        --cold-verification-key-file "$f" \
+        --out-file "${action_base}_spo${index}.vote"
+    done
+  fi
+
+  if [ "$with_dreps" = "yes" ]; then
+    index=0
+    for f in "${STATE_CLUSTER:?}"/governance_data/default_drep*_drep.vkey; do
+      [ -e "$f" ] || continue
+      index="$((index + 1))"
+      cardano_cli_log conway governance vote create \
+        --yes \
+        --governance-action-tx-id "$action_txid" \
+        --governance-action-index 0 \
+        --drep-verification-key-file "$f" \
+        --out-file "${action_base}_drep${index}.vote"
+    done
+  fi
+}
+
+submit_votes() {
+  local votes_base="${1:?}"
+  local action_base="${2:?}"
+  local f
+
+  local -a vote_files=()
+  for f in "$action_base"_*.vote; do
+    [ -e "$f" ] || continue
+    vote_files+=( "--vote-file" "$f" )
+  done
+  [ "${#vote_files[@]}" -gt 0 ] || \
+    { echo "No vote files found for action base '${action_base}', line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+
+  local -a cc_signing=()
+  for f in "${STATE_CLUSTER:?}"/governance_data/cc_member*_committee_hot.skey; do
+    [ -e "$f" ] || continue
+    cc_signing+=( "--signing-key-file" "$f" )
+  done
+
+  local -a pool_signing=()
+  if [ -e "${action_base}_spo1.vote" ]; then
+    for f in "${STATE_CLUSTER:?}"/nodes/node-pool*/cold.skey; do
+      [ -e "$f" ] || continue
+      pool_signing+=( "--signing-key-file" "$f" )
+    done
+  fi
+
+  local -a drep_signing=()
+  if [ -e "${action_base}_drep1.vote" ]; then
+    for f in "${STATE_CLUSTER:?}"/governance_data/default_drep*_drep.skey; do
+      [ -e "$f" ] || continue
+      drep_signing+=( "--signing-key-file" "$f" )
+    done
+  fi
+
+  get_txins "${FAUCET_ADDR:?}" "${FEE:?}"
+
+  local txout_amount="$((TXIN_AMOUNT - FEE))"
+
+  cardano_cli_log conway transaction build-raw \
+    --fee    "${FEE:?}" \
+    "${TXINS[@]}" \
+    "${vote_files[@]}" \
+    --tx-out "${FAUCET_ADDR:?}+${txout_amount}" \
+    --out-file "${votes_base}-tx.txbody"
+
+  cardano_cli_log conway transaction sign \
+    --signing-key-file "${FAUCET_SKEY:?}" \
+    "${cc_signing[@]}" \
+    "${pool_signing[@]}" \
+    "${drep_signing[@]}" \
+    --testnet-magic    "${NETWORK_MAGIC:?}" \
+    --tx-body-file     "${votes_base}-tx.txbody" \
+    --out-file         "${votes_base}-tx.tx"
+
+  cardano_cli_log conway transaction submit \
+    --tx-file "${votes_base}-tx.tx" \
+    --testnet-magic "${NETWORK_MAGIC:?}"
+
+  sleep "${SUBMIT_DELAY:?}"
+  if ! check_spend_success "${TXINS[@]}"; then
+    echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
 }
 
 configure_supervisor() {
@@ -707,20 +884,20 @@ _fund_tx_gen() {
 
   local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
 
-  cardano_cli_log conway transaction build-raw \
+  cardano_cli_log latest transaction build-raw \
     --fee    "$fee" \
     "${TXINS[@]}" \
     --tx-out "${addr}+${fund_amount}" \
     --tx-out "${FAUCET_ADDR}+${txout_amount}" \
     --out-file "${tx_base}-tx.txbody"
 
-  cardano_cli_log conway transaction sign \
+  cardano_cli_log latest transaction sign \
     --signing-key-file "${FAUCET_SKEY:?}" \
     --testnet-magic    "${NETWORK_MAGIC:?}" \
     --tx-body-file     "${tx_base}-tx.txbody" \
     --out-file         "${tx_base}-tx.tx"
 
-  cardano_cli_log conway transaction submit \
+  cardano_cli_log latest transaction submit \
     --tx-file "${tx_base}-tx.tx" \
     --testnet-magic "${NETWORK_MAGIC:?}"
 
@@ -754,8 +931,8 @@ _create_tx_gen_config() {
     --arg skey "$skey_file" \
     '{
       debugMode: false,
-      tx_count: 50000,
-      tps: 30,
+      tx_count: 150000,
+      tps: 100,
       inputs_per_tx: 2,
       outputs_per_tx: 2,
       tx_fee: 212345,
@@ -824,7 +1001,7 @@ setup_tx_generator() {
   get_epoch_sec > /dev/null
   if [ "$EPOCH_SEC" -gt 3600 ]; then
     has_long_epoch_sec=true
-    tx_count=150000
+    tx_count=250000
   fi
 
   _create_tx_gen_config \
