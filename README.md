@@ -113,3 +113,25 @@ pip install -U --require-virtualenv cardonnay
 # (Optional) Enable shell completions for Bash
 source completions/cardonnay.bash-completion
 ```
+
+---
+
+## ⚙️ db-sync (optional)
+
+db-sync is started automatically when `DBSYNC_SCHEMA_DIR` points to the
+[`cardano-db-sync`](https://github.com/IntersectMBO/cardano-db-sync) schema directory
+(`cardano-db-sync` must be on your `PATH`). It stays off otherwise.
+
+Set these env vars **before** `cardonnay create`:
+
+| Env var | Effect |
+| --- | --- |
+| `DBSYNC_SCHEMA_DIR` | Path to the db-sync schema dir; enables db-sync. |
+| `SMASH` | Truthy (`1`/`true`/`yes`/`on`) also starts a SMASH server. |
+| `DBSYNC_ALLOW_PRIVATE_OFFCHAIN_URLS` | Truthy lets db-sync fetch off-chain anchor data (pool/governance metadata) served from `localhost`. Needed on a local testnet; off by default. |
+
+```sh
+export DBSYNC_SCHEMA_DIR=/path/to/cardano-db-sync/schema
+export DBSYNC_ALLOW_PRIVATE_OFFCHAIN_URLS=true
+cardonnay create -t conway_fast
+```
