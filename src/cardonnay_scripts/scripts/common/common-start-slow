@@ -524,14 +524,16 @@ submit_legacy_update_proposal() {
   local era="${1:?}"
   local proposal_file="${2:?}"
   local tx_base="${3:?}"
+  local -a txins=()
+  local txin_amount=0
 
-  get_txins "$FAUCET_ADDR" "$FEE"
+  get_txins "$FAUCET_ADDR" "$FEE" txins txin_amount
 
-  local txout_amount="$((TXIN_AMOUNT - FEE))"
+  local txout_amount="$((txin_amount - FEE))"
 
   cardano_cli_log compatible "$era" transaction signed-transaction \
     --fee    "$FEE" \
-    "${TXINS[@]}" \
+    "${txins[@]}" \
     --tx-out "${FAUCET_ADDR}+${txout_amount}" \
     --update-proposal-file "$proposal_file" \
     --signing-key-file "$FAUCET_SKEY" \
@@ -544,7 +546,7 @@ submit_legacy_update_proposal() {
     --testnet-magic "$NETWORK_MAGIC"
 
   sleep "$SUBMIT_DELAY"
-  if ! check_spend_success "${TXINS[@]}"; then
+  if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
@@ -575,10 +577,12 @@ _register_governance_in_conway() {
   local needed_amount="$(( (DREP_DELEGATED + deposits) * NUM_DREPS ))"
   local stop_txin_amount="$((FEE + needed_amount))"
   local f i
+  local -a txins=()
+  local txin_amount=0
 
-  get_txins "$FAUCET_ADDR" "$stop_txin_amount"
+  get_txins "$FAUCET_ADDR" "$stop_txin_amount" txins txin_amount
 
-  local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
+  local txout_amount="$((txin_amount - stop_txin_amount))"
   local v9_tx="${STATE_CLUSTER}/governance_data/setup_governance"
 
   local -a cc_args=()
@@ -622,7 +626,7 @@ _register_governance_in_conway() {
 
   cardano_cli_log conway transaction build-raw \
     --fee    "$FEE" \
-    "${TXINS[@]}" \
+    "${txins[@]}" \
     "${cc_args[@]}" \
     "${dreps_args[@]}" \
     "${pool_args[@]}" \
@@ -643,7 +647,7 @@ _register_governance_in_conway() {
     --testnet-magic "$NETWORK_MAGIC"
 
   sleep "$SUBMIT_DELAY"
-  if ! check_spend_success "${TXINS[@]}"; then
+  if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
@@ -761,10 +765,12 @@ hf_to_allegra() {
   local deposits="$((POOL_DEPOSIT + (2 * KEY_DEPOSIT) ))"
   local needed_amount="$(( (POOL_PLEDGE + deposits) * NUM_POOLS ))"
   local stop_txin_amount="$((needed_amount + FEE))"
+  local -a txins=()
+  local txin_amount=0
 
-  get_txins "$FAUCET_ADDR" "$stop_txin_amount"
+  get_txins "$FAUCET_ADDR" "$stop_txin_amount" txins txin_amount
 
-  local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
+  local txout_amount="$((txin_amount - stop_txin_amount))"
 
   local -a pool_args=()
   local -a pool_signing=()
@@ -786,7 +792,7 @@ hf_to_allegra() {
 
   cardano_cli_log compatible shelley transaction signed-transaction \
     --fee    "$FEE" \
-    "${TXINS[@]}" \
+    "${txins[@]}" \
     --tx-out "${FAUCET_ADDR}+${txout_amount}" \
     "${pool_args[@]}" \
     --update-proposal-file "$allegra_proposal_file" \
@@ -802,7 +808,7 @@ hf_to_allegra() {
     --testnet-magic "$NETWORK_MAGIC"
 
   sleep "$SUBMIT_DELAY"
-  if ! check_spend_success "${TXINS[@]}"; then
+  if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi

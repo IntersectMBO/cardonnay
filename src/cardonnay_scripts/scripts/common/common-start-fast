@@ -397,8 +397,10 @@ register_entities() {
 
   local fee_buffer=100000000
   local stop_txin_amount="$((needed_amount + fee_buffer))"
+  local -a txins=()
+  local txin_amount=0
 
-  get_txins "$FAUCET_ADDR" "$stop_txin_amount"
+  get_txins "$FAUCET_ADDR" "$stop_txin_amount" txins txin_amount
 
   local -a pool_args=()
   local -a pool_signing=()
@@ -450,7 +452,7 @@ register_entities() {
   local witness_count="$((${#pool_signing[@]} + ${#genesis_signing[@]} + ${#delegate_signing[@]} + ${#cc_signing[@]} + ${#dreps_signing[@]} + 1))"
 
   cardano_cli_log "$command_era" transaction build \
-    "${TXINS[@]}" \
+    "${txins[@]}" \
     --change-address   "$FAUCET_ADDR" \
     "${pool_args[@]}" \
     "${cc_args[@]}" \
@@ -475,7 +477,7 @@ register_entities() {
     --testnet-magic "$NETWORK_MAGIC"
 
   sleep "$SUBMIT_DELAY"
-  if ! check_spend_success "${TXINS[@]}"; then
+  if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
