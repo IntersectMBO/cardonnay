@@ -3,6 +3,8 @@
 mkdir -p ./state-cluster%%INSTANCE_NUM%%/db-pool%%POOL_NUM%% || exit 1
 cd ./state-cluster%%INSTANCE_NUM%%/db-pool%%POOL_NUM%% || exit 1
 
+# --- Placeholder for any pre-run setup ---
+
 ARGS=( \
   run \
   --config ../config-pool%%POOL_NUM%%.json \
