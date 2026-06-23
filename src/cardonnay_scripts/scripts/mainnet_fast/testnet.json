@@ -1,6 +1,6 @@
 {
     "name": "mainnet_fast",
-    "description": "Local testnet that starts directly in Conway era and has the same epoch length as Mainnet.",
+    "description": "Local testnet that starts directly in target era and has the same epoch length as Mainnet.",
     "control_env": {
         "DBSYNC_SCHEMA_DIR": "will start and configure db-sync if the value is path to db-sync schema directory",
         "SMASH": "if set, will start and configure smash",

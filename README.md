@@ -15,11 +15,11 @@ It supports multiple preconfigured testnet types and makes it easy to inspect an
 
 ## 🚀 Getting Started
 
-### 1. Create a `conway_fast` testnet
+### 1. Create a `local_fast` testnet
 
 ```sh
-$ cardonnay create -t conway_fast
-Starting the testnet cluster with `/var/tmp/cardonnay-of-user/cluster0_conway_fast/start-cluster`:
+$ cardonnay create -t local_fast
+Starting the testnet cluster with `/var/tmp/cardonnay-of-user/cluster0_local_fast/start-cluster`:
 [...]
 Cluster started 🚀
 ```
@@ -34,7 +34,7 @@ Cluster started 🚀
 [
   {
     "instance": 0,
-    "type": "conway_fast",
+    "type": "local_fast",
     "state": "started",
     "comment": null
   }
@@ -133,5 +133,5 @@ Set these env vars **before** `cardonnay create`:
 ```sh
 export DBSYNC_SCHEMA_DIR=/path/to/cardano-db-sync/schema
 export DBSYNC_ALLOW_PRIVATE_OFFCHAIN_URLS=true
-cardonnay create -t conway_fast
+cardonnay create -t local_fast
 ```
