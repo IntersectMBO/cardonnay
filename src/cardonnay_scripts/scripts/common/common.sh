@@ -51,36 +51,49 @@ check_spend_success() {
 }
 
 get_txins() {
-  local txin_addr stop_txin_amount txhash txix amount _
+  # Internal locals are prefixed with `_gt_` to avoid shadowing the caller's
+  # output variables, which are passed by name.
+  local _gt_addr _gt_stop_amount _gt_txins_var _gt_amount_var
+  local _gt_txhash _gt_txix _gt_amount _gt_total _gt_i _
+  local -a _gt_txins
 
-  txin_addr="${1:?"Missing TxIn address"}"
-  stop_txin_amount="${2:?"Missing stop TxIn amount"}"
+  _gt_addr="${1:?"Missing TxIn address"}"
+  _gt_stop_amount="${2:?"Missing stop TxIn amount"}"
+  _gt_txins_var="${3:?"Missing TxIns variable name"}"
+  _gt_amount_var="${4:?"Missing TxIn amount variable name"}"
 
-  stop_txin_amount="$((stop_txin_amount + 2000000))"
+  _gt_stop_amount="$((_gt_stop_amount + 2000000))"
 
   # Repeat in case `query utxo` fails
   for _ in {1..3}; do
-    TXINS=()
-    TXIN_AMOUNT=0
-    while read -r txhash txix amount _; do
-      if [ -z "$txhash" ] || [ -z "$txix" ] || [ "$amount" -lt 1000000 ]; then
+    _gt_txins=()
+    _gt_total=0
+    while read -r _gt_txhash _gt_txix _gt_amount _; do
+      if [ -z "$_gt_txhash" ] || [ -z "$_gt_txix" ] || [ "$_gt_amount" -lt 1000000 ]; then
         continue
       fi
-      TXIN_AMOUNT="$((TXIN_AMOUNT + amount))"
-      TXINS+=("--tx-in" "${txhash}#${txix}")
-      if [ "$TXIN_AMOUNT" -ge "$stop_txin_amount" ]; then
+      _gt_total="$((_gt_total + _gt_amount))"
+      _gt_txins+=("--tx-in" "${_gt_txhash}#${_gt_txix}")
+      if [ "$_gt_total" -ge "$_gt_stop_amount" ]; then
         break
       fi
     done <<< "$(cardano_cli_log latest query utxo \
                 --testnet-magic "${NETWORK_MAGIC:?}" \
                 --output-text \
-                --address "$txin_addr" |
+                --address "$_gt_addr" |
                 grep -E "lovelace$|[0-9]$|lovelace \+ TxOutDatumNone$|lovelace \+ NoDatum" || echo "")"
 
-    if [ "$TXIN_AMOUNT" -ge "$stop_txin_amount" ]; then
+    if [ "$_gt_total" -ge "$_gt_stop_amount" ]; then
       break
     fi
   done
+
+  # Set the caller's variables.
+  eval "$_gt_txins_var=()"
+  for ((_gt_i=0; _gt_i<${#_gt_txins[@]}; _gt_i++)); do
+    printf -v "${_gt_txins_var}[$_gt_i]" '%s' "${_gt_txins[$_gt_i]}"
+  done
+  printf -v "$_gt_amount_var" '%d' "$_gt_total"
 }
 
 get_address_balance() {
@@ -225,14 +238,16 @@ save_protocol_params() {
 submit_gov_action() {
   local action_base="${1:?}"
   local stop_txin_amount="$((${FEE:?} + ${GOV_ACTION_DEPOSIT:?}))"
+  local -a txins=()
+  local txin_amount=0
 
-  get_txins "${FAUCET_ADDR:?}" "$stop_txin_amount"
+  get_txins "${FAUCET_ADDR:?}" "$stop_txin_amount" txins txin_amount
 
-  local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
+  local txout_amount="$((txin_amount - stop_txin_amount))"
 
   cardano_cli_log conway transaction build-raw \
     --fee    "${FEE:?}" \
-    "${TXINS[@]}" \
+    "${txins[@]}" \
     --proposal-file "${action_base}.action" \
     --tx-out "${FAUCET_ADDR:?}+${txout_amount}" \
     --out-file "${action_base}-tx.txbody"
@@ -248,7 +263,7 @@ submit_gov_action() {
     --testnet-magic "${NETWORK_MAGIC:?}"
 
   sleep "${SUBMIT_DELAY:?}"
-  if ! check_spend_success "${TXINS[@]}"; then
+  if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
@@ -368,13 +383,16 @@ submit_votes() {
     done
   fi
 
-  get_txins "${FAUCET_ADDR:?}" "${FEE:?}"
+  local -a txins=()
+  local txin_amount=0
 
-  local txout_amount="$((TXIN_AMOUNT - FEE))"
+  get_txins "${FAUCET_ADDR:?}" "${FEE:?}" txins txin_amount
+
+  local txout_amount="$((txin_amount - FEE))"
 
   cardano_cli_log conway transaction build-raw \
     --fee    "${FEE:?}" \
-    "${TXINS[@]}" \
+    "${txins[@]}" \
     "${vote_files[@]}" \
     --tx-out "${FAUCET_ADDR:?}+${txout_amount}" \
     --out-file "${votes_base}-tx.txbody"
@@ -393,7 +411,7 @@ submit_votes() {
     --testnet-magic "${NETWORK_MAGIC:?}"
 
   sleep "${SUBMIT_DELAY:?}"
-  if ! check_spend_success "${TXINS[@]}"; then
+  if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
@@ -873,6 +891,8 @@ _fund_tx_gen() {
   local stop_txin_amount="$((fund_amount + fee))"
   local tx_base="${STATE_CLUSTER:?}/shelley/fund-tx-generator"
   local addr_balance
+  local -a txins=()
+  local txin_amount=0
 
   addr_balance="$(get_address_balance --address "$addr")"
   if [ "$addr_balance" -ge "$fund_amount" ]; then
@@ -880,13 +900,13 @@ _fund_tx_gen() {
     return
   fi
 
-  get_txins "${FAUCET_ADDR:?}" "$stop_txin_amount"
+  get_txins "${FAUCET_ADDR:?}" "$stop_txin_amount" txins txin_amount
 
-  local txout_amount="$((TXIN_AMOUNT - stop_txin_amount))"
+  local txout_amount="$((txin_amount - stop_txin_amount))"
 
   cardano_cli_log latest transaction build-raw \
     --fee    "$fee" \
-    "${TXINS[@]}" \
+    "${txins[@]}" \
     --tx-out "${addr}+${fund_amount}" \
     --tx-out "${FAUCET_ADDR}+${txout_amount}" \
     --out-file "${tx_base}-tx.txbody"
@@ -902,7 +922,7 @@ _fund_tx_gen() {
     --testnet-magic "${NETWORK_MAGIC:?}"
 
   sleep "${SUBMIT_DELAY:?}"
-  if ! check_spend_success "${TXINS[@]}"; then
+  if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
