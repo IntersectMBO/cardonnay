@@ -3,6 +3,8 @@
 mkdir -p ./state-cluster%%INSTANCE_NUM%%/db-bft1 || exit 1
 cd ./state-cluster%%INSTANCE_NUM%%/db-bft1 || exit 1
 
+# --- Placeholder for any pre-run setup ---
+
 ARGS=( \
   run \
   --config ../config-bft1.json \
