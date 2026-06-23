@@ -5,7 +5,7 @@ cd ./state-cluster%%INSTANCE_NUM%%/db-bft1 || exit 1
 
 # --- Placeholder for any pre-run setup ---
 
-ARGS=( \
+args=( \
   run \
   --config ../config-bft1.json \
   --database-path ./ \
@@ -17,5 +17,5 @@ ARGS=( \
 )
 
 echo "Starting cardano-node run with PID $$ in db-bft1 directory:"
-echo "cardano-node ${ARGS[*]}"
-exec cardano-node "${ARGS[@]}"
+echo "cardano-node ${args[*]}"
+exec cardano-node "${args[@]}"
