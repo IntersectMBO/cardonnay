@@ -5,7 +5,7 @@ cd ./state-cluster%%INSTANCE_NUM%%/db-pool%%POOL_NUM%% || exit 1
 
 # --- Placeholder for any pre-run setup ---
 
-ARGS=( \
+args=( \
   run \
   --config ../config-pool%%POOL_NUM%%.json \
   --database-path ./ \
@@ -20,5 +20,5 @@ ARGS=( \
 )
 
 echo "Starting cardano-node run with PID $$ in db-pool%%POOL_NUM%% directory:"
-echo "cardano-node ${ARGS[*]}"
-exec cardano-node "${ARGS[@]}"
+echo "cardano-node ${args[*]}"
+exec cardano-node "${args[@]}"
