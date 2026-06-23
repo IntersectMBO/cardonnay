@@ -1,6 +1,6 @@
 {
-    "name": "conway_fast",
-    "description": "Local testnet that starts directly in Conway era.",
+    "name": "local_fast",
+    "description": "Local testnet that starts directly in target era.",
     "control_env": {
         "DBSYNC_SCHEMA_DIR": "will start and configure db-sync if the value is path to db-sync schema directory",
         "SMASH": "if set, will start and configure smash",

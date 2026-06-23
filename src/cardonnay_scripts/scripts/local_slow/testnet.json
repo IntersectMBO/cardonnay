@@ -1,6 +1,6 @@
 {
-    "name": "conway_slow",
-    "description": "Local testnet that starts in Byron era and hard-forks through all the protocol versions until it gets to Conway.",
+    "name": "local_slow",
+    "description": "Local testnet that starts in Byron era and hard-forks through all the protocol versions.",
     "control_env": {
         "DBSYNC_SCHEMA_DIR": "will start and configure db-sync if the value is path to db-sync schema directory",
         "SMASH": "if set, will start and configure smash",
