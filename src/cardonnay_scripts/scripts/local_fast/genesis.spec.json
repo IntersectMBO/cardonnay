@@ -11,7 +11,7 @@
     "maxTxSize": 16384,
     "minPoolCost": 0,
     "minFeeA": 44,
-    "maxBlockBodySize": 65536,
+    "maxBlockBodySize": 90112,
     "minFeeB": 155381,
     "eMax": 18,
     "extraEntropy": {
