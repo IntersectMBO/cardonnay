@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+mkdir -p ./state-cluster%%INSTANCE_NUM%%/db-pool%%POOL_NUM%% || exit 1
+cd ./state-cluster%%INSTANCE_NUM%%/db-pool%%POOL_NUM%% || exit 1
+
+# --- Placeholder for any pre-run setup ---
+
+args=( \
+  run \
+  --config ../config-pool%%POOL_NUM%%.json \
+  --database-path ./ \
+  --topology ../topology-pool%%POOL_NUM%%.json \
+  --host-addr 127.0.0.1 \
+  --port %%NODE_PORT%% \
+  --socket-path ../pool%%POOL_NUM%%.socket \
+  --shelley-vrf-key ../nodes/node-pool%%POOL_NUM%%/vrf.skey \
+  --shelley-kes-key ../nodes/node-pool%%POOL_NUM%%/kes.skey \
+  --shelley-operational-certificate ../nodes/node-pool%%POOL_NUM%%/op.cert \
+  "$@" \
+)
+
+echo "Starting cardano-node run with PID $$ in db-pool%%POOL_NUM%% directory:"
+echo "cardano-node ${args[*]}"
+exec cardano-node "${args[@]}"
