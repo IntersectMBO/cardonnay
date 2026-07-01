@@ -1042,7 +1042,7 @@ _create_tx_gen_config() {
     --arg skey "$skey_file" \
     '{
       debugMode: false,
-      tx_count: 150000,
+      tx_count: 500000,
       tps: 100,
       inputs_per_tx: 2,
       outputs_per_tx: 2,
@@ -1088,16 +1088,25 @@ _wait_for_tx_gen_tx() {
 
   local logfile="${STATE_CLUSTER}/tx-generator.stdout"
   local attempts=360
+  local start_time elapsed_time
+  local success=0
   local a
 
+  start_time="$EPOCHSECONDS"
   for ((a=1; a<=attempts; a++)); do
     if tail -n 100 "$logfile" | grep -q "SubmissionClientReplyTxIds"; then
-      return 0
+      success=1
+      break
     fi
     sleep 20
   done
-  echo "Tx generator did not start submitting transactions, line $LINENO in ${BASH_SOURCE[0]}" >&2
-  exit 1
+
+  elapsed_time="$((EPOCHSECONDS - start_time))"
+  if [ "$success" -eq 0 ]; then
+    echo "Tx generator did not start submitting transactions after $elapsed_time seconds, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+  echo "Tx generator started submitting transactions after $elapsed_time seconds"
 }
 
 setup_tx_generator() {
@@ -1109,34 +1118,21 @@ setup_tx_generator() {
   : "${SUPERVISORD_SOCKET_PATH:?SUPERVISORD_SOCKET_PATH is required}"
 
   local fund_amount="${1:?}"
-  local tx_count=50000
-  local has_long_epoch_sec=false
 
   _fund_tx_gen "$(<"${STATE_CLUSTER}/shelley/genesis-utxo2.addr")" "$fund_amount"
-
-  # When epochs are long, the tx generator setup takes more time, so we increase the number of transactions to
-  # minimize the number of repeated setups.
-  get_epoch_sec > /dev/null
-  if [ "$EPOCH_SEC" -gt 3600 ]; then
-    has_long_epoch_sec=true
-    tx_count=250000
-  fi
 
   _create_tx_gen_config \
     "${STATE_CLUSTER}/topology-bft1.json" \
     "./pool1.socket" \
     "./config-pool1.json" \
-    "./shelley/genesis-utxo2.skey" | jq -r ".tx_count = $tx_count" > "${STATE_CLUSTER}/tx-generator-config.json"
+    "./shelley/genesis-utxo2.skey" > "${STATE_CLUSTER}/tx-generator-config.json"
 
   echo "Starting tx-generator"
   supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start tx_generator || \
     { echo "Failed to start tx generator, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
   _wait_for_tx_gen_log
 
-  # When epochs are long, the tx generator setup takes more time, so we wait for it to start submitting transactions
-  # before proceeding.
-  if [ "$has_long_epoch_sec" = true ]; then
-    echo "Waiting for tx generator to start submitting transactions"
-    _wait_for_tx_gen_tx
-  fi
+  # The tx generator setup takes time, so we wait for it to start submitting transactions before proceeding
+  echo "Waiting for tx generator to start submitting transactions"
+  _wait_for_tx_gen_tx
 }
