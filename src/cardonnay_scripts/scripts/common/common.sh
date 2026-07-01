@@ -220,7 +220,7 @@ wait_for_epoch() {
     if [ "$curr_epoch" -ge "$target_epoch" ]; then
       return
     fi
-    sleep 3
+    sleep 5
   done
 
   echo "Unexpected epoch '$curr_epoch' instead of '$target_epoch'" >&2
