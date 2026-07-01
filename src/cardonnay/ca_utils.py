@@ -115,7 +115,10 @@ def delay_instance(instance_num: int, workdir: pl.Path) -> bool:
     with filelock.FileLock(lock_file=lockfile, timeout=2):
         delay_instances = get_delay_instances(workdir=workdir)
         if instance_num in delay_instances:
-            LOGGER.error(f"Instance number {instance_num} is already delayed.")
+            LOGGER.error(
+                f"There was a recent attempt to start/stop the instance number {instance_num}. "
+                "Re-try later."
+            )
             return False
         create_delay_file(instance_num=instance_num, workdir=workdir)
 
