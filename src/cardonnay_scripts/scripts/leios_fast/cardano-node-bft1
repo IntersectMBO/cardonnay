@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+mkdir -p ./state-cluster%%INSTANCE_NUM%%/db-bft1 || exit 1
+cd ./state-cluster%%INSTANCE_NUM%%/db-bft1 || exit 1
+
+# --- Placeholder for any pre-run setup ---
+
+args=( \
+  run \
+  --config ../config-bft1.json \
+  --database-path ./ \
+  --topology ../topology-bft1.json \
+  --host-addr 127.0.0.1 \
+  --port %%NODE_PORT_BASE%% \
+  --socket-path ../bft1.socket \
+  "$@" \
+)
+
+echo "Starting cardano-node run with PID $$ in db-bft1 directory:"
+echo "cardano-node ${args[*]}"
+exec cardano-node "${args[@]}"
