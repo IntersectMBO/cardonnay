@@ -32,6 +32,25 @@ get_slot_length() {
   echo "$SLOT_LENGTH"
 }
 
+get_active_slot_coeff() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+
+  if [ -z "${ACTIVE_SLOT_COEFF:-}" ]; then
+    ACTIVE_SLOT_COEFF="$(jq '.activeSlotsCoeff' < "${STATE_CLUSTER}/shelley/genesis.json")"
+  fi
+  echo "$ACTIVE_SLOT_COEFF"
+}
+
+get_block_interval_sec() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+
+  # Expected wall-clock seconds between forged blocks: slotLength / activeSlotsCoeff.
+  jq -n \
+    --argjson sl "$(get_slot_length)" \
+    --argjson co "$(get_active_slot_coeff)" \
+    'if $co > 0 then ($sl / $co | ceil) else ($sl | ceil) end'
+}
+
 cardano_cli_log() {
   : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
 
@@ -201,7 +220,8 @@ wait_for_epoch() {
   local sec_to_epoch_end
   local sec_to_sleep
   local curr_epoch
-  local _
+  local poll_interval=5
+  local max_wait attempts i
 
   start_epoch="$(get_epoch)"
 
@@ -215,15 +235,26 @@ wait_for_epoch() {
   sec_to_sleep="$(( sec_to_epoch_end + ((epochs_to_go - 1) * $(get_epoch_sec)) ))"
   sleep "$sec_to_sleep"
 
-  for _ in {1..10}; do
+  # After sleeping to the wall-clock start of the target epoch, we still have to wait
+  # for the first block of that epoch to be forged, because `get_epoch` reads the epoch
+  # of the chain tip. Block production is probabilistic (activeSlotsCoeff), so scale the
+  # grace period to several expected block intervals instead of a fixed window; the loop
+  # returns as soon as the tip reaches the target epoch.
+  max_wait="$(( $(get_block_interval_sec) * 20 ))"
+  if [ "$max_wait" -lt 50 ]; then
+    max_wait=50
+  fi
+  attempts="$(( (max_wait + poll_interval - 1) / poll_interval ))"
+
+  for ((i=1; i<=attempts; i++)); do
     curr_epoch="$(get_epoch)"
     if [ "$curr_epoch" -ge "$target_epoch" ]; then
       return
     fi
-    sleep 5
+    sleep "$poll_interval"
   done
 
-  echo "Unexpected epoch '$curr_epoch' instead of '$target_epoch'" >&2
+  echo "Unexpected epoch '$curr_epoch' instead of '$target_epoch' after waiting ${max_wait}s past the epoch boundary" >&2
   exit 1
 }
 
