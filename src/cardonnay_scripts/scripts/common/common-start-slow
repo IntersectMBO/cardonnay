@@ -111,6 +111,11 @@ initialize_globals() {
     exit 1
   fi
 
+  if is_truthy "${ENABLE_TX_CENTRIFUGE:-}"; then
+    echo "tx-centrifuge is not supported in the slow cluster script, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+
   readonly FUNDS_PER_GENESIS_ADDRESS="$((MAX_SUPPLY / NUM_BFT_NODES))"
   readonly FUNDS_PER_BYRON_ADDRESS="$((FUNDS_PER_GENESIS_ADDRESS * 8 / 10))"
 }

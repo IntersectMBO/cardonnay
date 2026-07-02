@@ -112,6 +112,11 @@ initialize_globals() {
   # shellcheck disable=SC1091
   source "${SCRIPT_DIR}/common.sh"
 
+  if is_truthy "${ENABLE_TX_GENERATOR:-}" && is_truthy "${ENABLE_TX_CENTRIFUGE:-}"; then
+    echo "ENABLE_TX_GENERATOR and ENABLE_TX_CENTRIFUGE are mutually exclusive, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+
   if [ -e "${SCRIPT_DIR}/shell_env" ]; then
     # shellcheck disable=SC1091
     source "${SCRIPT_DIR}/shell_env"
@@ -547,6 +552,7 @@ main() {
   hf_to_dijkstra "$(get_epoch)"
   use_genesis_mode
   setup_tx_generator "$TX_GENERATOR_MIN_FUNDS"
+  setup_tx_centrifuge
 
   : > "$START_CLUSTER_STATUS"
   echo "Cluster started 🚀"
