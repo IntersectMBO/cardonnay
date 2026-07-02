@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+initialize() {
+  local retval=0
+  local socket_path state_cluster
+
+  if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+    echo "CARDANO_NODE_SOCKET_PATH is not set" >&2
+    retval=1
+  fi
+  if ! command -v tx-centrifuge &> /dev/null; then
+    echo "tx-centrifuge is not available in PATH" >&2
+    retval=1
+  fi
+  if [ "$retval" -ne 0 ]; then
+    exit "$retval"
+  fi
+
+  socket_path="$(readlink -m "${CARDANO_NODE_SOCKET_PATH:-}")"
+  state_cluster="${socket_path%/*}"
+  readonly CENTRIFUGE_CONFIG="${state_cluster}/tx-centrifuge-config.json"
+
+  if [ ! -f "$CENTRIFUGE_CONFIG" ]; then
+    echo "Centrifuge config file not found at $CENTRIFUGE_CONFIG" >&2
+    exit 1
+  fi
+
+  cd "$state_cluster"
+}
+
+wait_for_socket() {
+  for _ in {1..5}; do
+    if [ -S "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+      return 0
+    fi
+    echo "Waiting for socket ${CARDANO_NODE_SOCKET_PATH:-} to be available..."
+    sleep 5
+  done
+
+  echo "Socket ${CARDANO_NODE_SOCKET_PATH:-} is not available after waiting" >&2
+  exit 1
+}
+
+run_tx_centrifuge() {
+  local attempt=1
+
+  while true; do
+    wait_for_socket
+
+    echo "Generating transactions..."
+    if tx-centrifuge "$CENTRIFUGE_CONFIG"; then
+      attempt=1
+      sleep 15
+    else
+      if [ $attempt -ge 4 ]; then
+        echo "tx-centrifuge failed after $attempt attempts, exiting." >&2
+        exit 1
+      fi
+      echo "tx-centrifuge failed, retrying in 5 seconds..." >&2
+      attempt=$((attempt + 1))
+      sleep 5
+    fi
+  done
+}
+
+initialize
+run_tx_centrifuge

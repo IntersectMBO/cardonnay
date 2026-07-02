@@ -571,6 +571,21 @@ startsecs=5
 EoF
   fi
 
+  if is_truthy "${ENABLE_TX_CENTRIFUGE:-}"; then
+    cp "${SCRIPT_DIR}/run-tx-centrifuge" "${STATE_CLUSTER}"
+
+    cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
+
+[program:tx_centrifuge]
+command=./${STATE_CLUSTER_NAME}/run-tx-centrifuge
+stderr_logfile=./${STATE_CLUSTER_NAME}/tx-centrifuge.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME}/tx-centrifuge.stdout
+autostart=false
+autorestart=false
+startsecs=5
+EoF
+  fi
+
   cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
 [group:nodes]
@@ -1020,8 +1035,8 @@ _fund_tx_gen() {
 }
 
 _create_tx_gen_config() {
-  if [ $# -lt 4 ]; then
-    echo "Usage: _create_tx_gen_config <topology> <node.socket> <config.json> <genesis.skey>" >&2
+  if [ $# -lt 5 ]; then
+    echo "Usage: _create_tx_gen_config <topology> <node.socket> <config.json> <genesis.skey> <tps>" >&2
     return 1
   fi
 
@@ -1029,6 +1044,7 @@ _create_tx_gen_config() {
   local socket_path="$2"
   local config_file="$3"
   local skey_file="$4"
+  local tps="$5"
 
   if [ ! -f "$topology_file" ]; then
     echo "Error: topology file not found: $topology_file" >&2
@@ -1040,10 +1056,11 @@ _create_tx_gen_config() {
     --arg socket "$socket_path" \
     --arg config "$config_file" \
     --arg skey "$skey_file" \
+    --argjson tps "$tps" \
     '{
       debugMode: false,
       tx_count: 500000,
-      tps: 100,
+      tps: $tps,
       inputs_per_tx: 2,
       outputs_per_tx: 2,
       tx_fee: 212345,
@@ -1118,6 +1135,7 @@ setup_tx_generator() {
   : "${SUPERVISORD_SOCKET_PATH:?SUPERVISORD_SOCKET_PATH is required}"
 
   local fund_amount="${1:?}"
+  local tps="${TX_TPS:-100}"
 
   _fund_tx_gen "$(<"${STATE_CLUSTER}/shelley/genesis-utxo2.addr")" "$fund_amount"
 
@@ -1125,7 +1143,8 @@ setup_tx_generator() {
     "${STATE_CLUSTER}/topology-bft1.json" \
     "./pool1.socket" \
     "./config-pool1.json" \
-    "./shelley/genesis-utxo2.skey" > "${STATE_CLUSTER}/tx-generator-config.json"
+    "./shelley/genesis-utxo2.skey" \
+    "$tps" > "${STATE_CLUSTER}/tx-generator-config.json"
 
   echo "Starting tx-generator"
   supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start tx_generator || \
@@ -1135,4 +1154,190 @@ setup_tx_generator() {
   # The tx generator setup takes time, so we wait for it to start submitting transactions before proceeding
   echo "Waiting for tx generator to start submitting transactions"
   _wait_for_tx_gen_tx
+}
+
+_create_tx_centrifuge_funds() {
+  local skey_file="${1:?}"
+  local value="${2:?}"
+
+  # A single genesis UTxO key fund. tx-centrifuge loads it via `genesis_utxo_keys`
+  # and derives the TxIn from the key with `genesisUTxOPseudoTxIn` (TxIx 0), so the
+  # key must be an untouched genesis initial fund and `value` must match its balance.
+  jq -n \
+    --arg skey "$skey_file" \
+    --argjson value "$value" \
+    '[{signing_key: $skey, value: $value}]'
+}
+
+_create_tx_centrifuge_config() {
+  if [ $# -lt 6 ]; then
+    echo "Usage: _create_tx_centrifuge_config <topology> <config.json> <funds.json> <pparams.json> <magic> <tps>" >&2
+    return 1
+  fi
+
+  local topology_file="$1"
+  local config_file="$2"
+  local funds_file="$3"
+  local pparams_file="$4"
+  local magic="$5"
+  local tps="$6"
+
+  if [ ! -f "$topology_file" ]; then
+    echo "Error: topology file not found: $topology_file" >&2
+    return 1
+  fi
+
+  jq -n \
+    --argjson topology "$(<"$topology_file")" \
+    --arg config "$config_file" \
+    --arg funds "$funds_file" \
+    --arg pparams "$pparams_file" \
+    --argjson magic "$magic" \
+    --argjson tps "$tps" \
+    '{
+      initial_inputs: {
+        type: "genesis_utxo_keys",
+        params: {
+          network_magic: $magic,
+          signing_keys_file: $funds
+        }
+      },
+      builder: {
+        type: "value",
+        params: {
+          inputs_per_tx: 1,
+          outputs_per_tx: 1,
+          fee: 1000000
+        },
+        recycle: {type: "on_build"}
+      },
+      rate_limit: {
+        type: "token_bucket",
+        scope: "shared",
+        params: {tps: $tps}
+      },
+      workloads: {
+        "synthetic-chain": {
+          targets: (
+            # Target a single node only. The workload is one serial 1-in/1-out chain
+            # with `on_build` recycling, so every tx spends the previous tx output. If
+            # the chain were round-robined across several nodes, each dependent tx would
+            # reach a node that has not yet seen its parent, and be rejected as a missing
+            # input. Submitting to one node keeps the chain in one mempool; normal tx
+            # propagation fans it out to the rest of the cluster.
+            [$topology.localRoots[].accessPoints[]][0:1]
+            | map({
+                ("node" + (.port | tostring)): {
+                  addr: "127.0.0.1",
+                  port: .port
+                }
+              })
+            | add
+          )
+        }
+      },
+      nodeConfig: $config,
+      protocolParametersFile: $pparams,
+      # tx-centrifuge reads its own trace config from this file (falls back to a
+      # Debug-severity default when absent). Set a severity threshold on the root
+      # namespace to suppress the very noisy Debug protocol traces while keeping the
+      # Info-level `Builder.NewTx` marker that the startup readiness check greps for.
+      TraceOptions: {
+        "": {
+          severity: "Info",
+          detail: "DNormal",
+          backends: ["Stdout MachineFormat"]
+        }
+      }
+    }'
+}
+
+_wait_for_tx_centrifuge_log() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+
+  local logfile="${STATE_CLUSTER}/tx-centrifuge.stdout"
+  local _
+
+  for _ in {1..10}; do
+    if [ -f "$logfile" ]; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "Tx centrifuge log file was not created, line $LINENO in ${BASH_SOURCE[0]}" >&2
+  exit 1
+}
+
+_wait_for_tx_centrifuge_tx() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+
+  local logfile="${STATE_CLUSTER}/tx-centrifuge.stdout"
+  local attempts=360
+  local start_time elapsed_time
+  local success=0
+  local a
+
+  start_time="$EPOCHSECONDS"
+  for ((a=1; a<=attempts; a++)); do
+    # The builder emits a `NewTx` trace (severity Info) for every transaction it assembles.
+    if tail -n 100 "$logfile" | grep -q "NewTx"; then
+      success=1
+      break
+    fi
+    sleep 20
+  done
+
+  elapsed_time="$((EPOCHSECONDS - start_time))"
+  if [ "$success" -eq 0 ]; then
+    echo "Tx centrifuge did not start submitting transactions after $elapsed_time seconds, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+  echo "Tx centrifuge started submitting transactions after $elapsed_time seconds"
+}
+
+setup_tx_centrifuge() {
+  if ! is_truthy "${ENABLE_TX_CENTRIFUGE:-}"; then
+    return 0
+  fi
+
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+  : "${SUPERVISORD_SOCKET_PATH:?SUPERVISORD_SOCKET_PATH is required}"
+  : "${NETWORK_MAGIC:?NETWORK_MAGIC is required}"
+
+  local tps="${TX_TPS:-100}"
+  local addr value
+
+  # Reuse the genesis-utxo2 key. It is a genesis UTxO key, so its genesis initial
+  # fund lives at `genesisUTxOPseudoTxIn` regardless of tx-generator (which funds a
+  # separate UTxO at the same address). tx-generator and tx-centrifuge are mutually
+  # exclusive, so when centrifuge runs this address holds only the genesis UTxO and
+  # its balance matches the value at that TxIn.
+  addr="$(<"${STATE_CLUSTER}/shelley/genesis-utxo2.addr")"
+  value="$(get_address_balance --address "$addr")"
+  if [ "$value" -le 0 ]; then
+    echo "Tx centrifuge genesis UTxO has no funds, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+
+  _create_tx_centrifuge_funds \
+    "./shelley/genesis-utxo2.skey" "$value" > "${STATE_CLUSTER}/funds-tx-centrifuge.json"
+
+  save_protocol_params "${STATE_CLUSTER}/pparams-tx-centrifuge.json"
+
+  _create_tx_centrifuge_config \
+    "${STATE_CLUSTER}/topology-bft1.json" \
+    "./config-pool1.json" \
+    "./funds-tx-centrifuge.json" \
+    "./pparams-tx-centrifuge.json" \
+    "$NETWORK_MAGIC" \
+    "$tps" > "${STATE_CLUSTER}/tx-centrifuge-config.json"
+
+  echo "Starting tx-centrifuge"
+  supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start tx_centrifuge || \
+    { echo "Failed to start tx centrifuge, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+  _wait_for_tx_centrifuge_log
+
+  # The tx centrifuge setup takes time, so we wait for it to start submitting transactions before proceeding
+  echo "Waiting for tx centrifuge to start submitting transactions"
+  _wait_for_tx_centrifuge_tx
 }
