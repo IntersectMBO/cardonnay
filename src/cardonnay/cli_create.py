@@ -184,6 +184,7 @@ def cmd_create(  # noqa: PLR0911, C901
 
     workdir_pl = ca_utils.get_workdir(workdir=workdir)
     workdir_abs = workdir_pl.absolute()
+    ca_utils.create_workdir(workdir=workdir_abs)
 
     lockfile = str(workdir_abs / ca_utils.DELAY_LOCK)
     with filelock.FileLock(lock_file=lockfile, timeout=2):

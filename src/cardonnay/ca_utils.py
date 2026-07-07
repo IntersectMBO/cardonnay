@@ -1,7 +1,9 @@
 import logging
 import os
 import pathlib as pl
+import pwd
 import shutil
+import stat
 import time
 import typing as tp
 
@@ -18,6 +20,8 @@ DELAY_STATUS = "delay_stat"
 DELAY_LOCK = "delay.lock"
 STATE_CLUSTER_PREFIX = "state-cluster"
 STATE_CLUSTER_PREFIX_LEN = len("state-cluster")
+WORKDIR_BASE = pl.Path("/var/tmp")
+WORKDIR_PREFIX = "cardonnay-of-"
 
 
 def create_env_vars(workdir: pl.Path, instance_num: int) -> dict[str, str]:
@@ -36,8 +40,29 @@ def get_workdir(workdir: ttypes.FileType) -> pl.Path:
     if workdir != "":
         return pl.Path(workdir).expanduser()
 
-    username = os.getlogin()
-    return pl.Path(f"/var/tmp/cardonnay-of-{username}")
+    username = pwd.getpwuid(os.geteuid()).pw_name
+    return WORKDIR_BASE / f"{WORKDIR_PREFIX}{username}"
+
+
+def create_workdir(workdir: pl.Path) -> None:
+    """Create the (already resolved) workdir securely if it does not exist yet.
+
+    Must run before any `filelock.FileLock` or `create_delay_file` touches the workdir,
+    otherwise those would create it with default (world-readable) permissions. Because it
+    lives in the shared `/var/tmp`, it is created with `0o700`; a pre-existing symlink,
+    non-directory or foreign-owned path is rejected to avoid hijacking.
+    """
+    try:
+        workdir.mkdir(mode=0o700, parents=True)
+    except FileExistsError:
+        st = workdir.lstat()
+        if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+            msg = f"Work dir '{workdir}' exists but is not a real directory."
+            raise RuntimeError(msg) from None
+        if st.st_uid != os.geteuid():
+            msg = f"Work dir '{workdir}' is not owned by the current user."
+            raise RuntimeError(msg) from None
+        workdir.chmod(0o700)
 
 
 def get_running_instances(workdir: pl.Path) -> set[int]:
@@ -111,6 +136,7 @@ def create_delay_file(instance_num: int, workdir: pl.Path) -> None:
 
 def delay_instance(instance_num: int, workdir: pl.Path) -> bool:
     """Delay the specified testnet instance to prevent concurrent access."""
+    create_workdir(workdir=workdir)
     lockfile = str(workdir / DELAY_LOCK)
     with filelock.FileLock(lock_file=lockfile, timeout=2):
         delay_instances = get_delay_instances(workdir=workdir)
