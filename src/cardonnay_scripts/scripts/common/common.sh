@@ -888,9 +888,8 @@ create_committee_keys_in_genesis() {
     .committee.members = $keyHashJson
     | .committee.threshold = 0.6
     | .committeeMinSize = 2
-    | .plutusV3CostModel |= .[0:251]
-    ' "${STATE_CLUSTER}/shelley/genesis.conway.json" > "${STATE_CLUSTER}/shelley/genesis.conway.tmp.json"
-  mv -f "${STATE_CLUSTER}/shelley/genesis.conway.tmp.json" "${STATE_CLUSTER}/shelley/genesis.conway.json"
+    ' "${STATE_CLUSTER:?}/shelley/genesis.conway.json" > "${STATE_CLUSTER:?}/shelley/genesis.conway.tmp.json"
+  mv -f "${STATE_CLUSTER:?}/shelley/genesis.conway.tmp.json" "${STATE_CLUSTER:?}/shelley/genesis.conway.json"
 }
 
 edit_genesis_conf() {

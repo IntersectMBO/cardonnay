@@ -170,11 +170,6 @@ create_genesis() {
     "${STATE_CLUSTER}/shelley/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.tmp.json"
   mv -f "${STATE_CLUSTER}/shelley/genesis.tmp.json" "${STATE_CLUSTER}/shelley/genesis.json"
 
-  jq '
-    .costModels.PlutusV2 |= .[0:175]
-    | if (.costModels.PlutusV2? // []) == [] then del(.costModels.PlutusV2) else . end
-    ' "${STATE_CLUSTER}/shelley/genesis.alonzo.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.tmp.json"
-  mv -f "${STATE_CLUSTER}/shelley/genesis.alonzo.tmp.json" "${STATE_CLUSTER}/shelley/genesis.alonzo.json"
 }
 
 get_genesis_data() {
