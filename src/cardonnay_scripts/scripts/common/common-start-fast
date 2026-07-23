@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 trap 'echo "Error at line $LINENO in ${BASH_SOURCE[0]}" >&2' ERR
 
-readonly PROTOCOL_VERSION="${PROTOCOL_VERSION:-10}"
+readonly PROTOCOL_VERSION="${PROTOCOL_VERSION:-11}"
 readonly NUM_BFT_NODES=1
 readonly NUM_CC=5
 readonly NUM_DREPS=5
