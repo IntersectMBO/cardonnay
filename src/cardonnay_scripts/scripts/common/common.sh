@@ -110,12 +110,17 @@ get_txins() {
                 --testnet-magic "${NETWORK_MAGIC}" \
                 --output-text \
                 --address "$_gt_addr" |
-                grep -E "lovelace$|[0-9]$|lovelace \+ TxOutDatumNone$|lovelace \+ NoDatum" || echo "")"
+                grep -E "lovelace \+ ?$|lovelace$|[0-9]$|lovelace \+ TxOutDatumNone$|lovelace \+ NoDatum" || echo "")"
 
     if [ "$_gt_total" -ge "$_gt_stop_amount" ]; then
       break
     fi
   done
+
+  if [ "$_gt_total" -lt "$_gt_stop_amount" ]; then
+    echo "Failed to get TxIns for '$_gt_addr': got ${_gt_total}, need ${_gt_stop_amount}, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
 
   # Set the caller's variables.
   eval "$_gt_txins_var=()"
