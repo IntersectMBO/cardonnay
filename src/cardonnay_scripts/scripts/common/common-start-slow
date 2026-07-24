@@ -147,6 +147,20 @@ create_genesis() {
 
   # Create Shelley genesis and subsequent era genesis files
 
+  # At genesis, the ledger only accepts cost models with the length each Plutus version
+  # had when it was first introduced (PlutusV1: 166, PlutusV2: 175, PlutusV3: 251).
+  # Parameters added by later protocol versions must be stripped here; they can only be
+  # set via a protocol parameter update once the cluster is running.
+  jq '
+    .costModels.PlutusV1 |= .[0:166]
+    | .costModels.PlutusV2 |= .[0:175]
+    ' "${STATE_CLUSTER}/shelley/genesis.alonzo.spec.json" > "${STATE_CLUSTER}/shelley/genesis.alonzo.spec.tmp.json"
+  mv "${STATE_CLUSTER}/shelley/genesis.alonzo.spec.tmp.json" "${STATE_CLUSTER}/shelley/genesis.alonzo.spec.json"
+  jq '
+    .plutusV3CostModel |= .[0:251]
+    ' "${STATE_CLUSTER}/shelley/genesis.conway.spec.json" > "${STATE_CLUSTER}/shelley/genesis.conway.spec.tmp.json"
+  mv "${STATE_CLUSTER}/shelley/genesis.conway.spec.tmp.json" "${STATE_CLUSTER}/shelley/genesis.conway.spec.json"
+
   local genesis_args=( \
     --genesis-dir "${STATE_CLUSTER}/shelley" \
     --testnet-magic "$NETWORK_MAGIC" \
@@ -169,7 +183,6 @@ create_genesis() {
   jq '.initialFunds = {}' \
     "${STATE_CLUSTER}/shelley/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.tmp.json"
   mv -f "${STATE_CLUSTER}/shelley/genesis.tmp.json" "${STATE_CLUSTER}/shelley/genesis.json"
-
 }
 
 get_genesis_data() {
@@ -693,7 +706,7 @@ _wait_pv9_cost_model_enacted() {
   save_protocol_params "$PPARAMS_FILE"
   local plutusv2_len
   plutusv2_len="$(jq '.costModels.PlutusV2 | length' < "$PPARAMS_FILE")"
-  if [ "$plutusv2_len" != 185 ]; then
+  if [ "$plutusv2_len" -lt 185 ]; then
     echo "Unexpected PlutusV2 cost model length '$plutusv2_len' on line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi

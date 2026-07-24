@@ -145,6 +145,20 @@ create_genesis() {
 
   mv "${STATE_CLUSTER}/byron-params.json" "${STATE_CLUSTER}/byron/params.json"
 
+  # At genesis, the ledger only accepts cost models with the length each Plutus version
+  # had when it was first introduced (PlutusV1: 166, PlutusV2: 175, PlutusV3: 251).
+  # Parameters added by later protocol versions must be stripped here; they can only be
+  # set via a protocol parameter update once the cluster is running.
+  jq '
+    .costModels.PlutusV1 |= .[0:166]
+    | .costModels.PlutusV2 |= .[0:175]
+    ' "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.json" > "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.tmp.json"
+  mv "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.tmp.json" "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.json"
+  jq '
+    .plutusV3CostModel |= .[0:251]
+    ' "${STATE_CLUSTER}/create_staked/genesis.conway.spec.json" > "${STATE_CLUSTER}/create_staked/genesis.conway.spec.tmp.json"
+  mv "${STATE_CLUSTER}/create_staked/genesis.conway.spec.tmp.json" "${STATE_CLUSTER}/create_staked/genesis.conway.spec.json"
+
   cardano_cli_log latest genesis create-staked \
     --genesis-dir "${STATE_CLUSTER}/create_staked" \
     --testnet-magic "$NETWORK_MAGIC" \
