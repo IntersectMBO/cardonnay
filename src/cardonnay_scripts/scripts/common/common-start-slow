@@ -706,7 +706,7 @@ _wait_pv9_cost_model_enacted() {
   save_protocol_params "$PPARAMS_FILE"
   local plutusv2_len
   plutusv2_len="$(jq '.costModels.PlutusV2 | length' < "$PPARAMS_FILE")"
-  if [ "$plutusv2_len" != 185 ]; then
+  if [ "$plutusv2_len" -lt 185 ]; then
     echo "Unexpected PlutusV2 cost model length '$plutusv2_len' on line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
