@@ -123,6 +123,80 @@ initialize_globals() {
   fi
 }
 
+# Compatibility shim for cardano-cli >= PR #1384, which writes initial funds and
+# staking into the Shelley genesis "extraConfig" (ledger's streaming data injection;
+# unrelated to the cost-models "extraConfig" in the Alonzo genesis) and leaves the
+# legacy "initialFunds"/"staking" fields empty. Nodes built with
+# cardano-ledger-shelley < 1.19 silently ignore "extraConfig", which would start
+# the cluster with an empty UTxO set and no registered pools.
+# Remove both functions and their call site once nodes without "extraConfig"
+# support are no longer tested.
+
+# Check whether the node's ledger can parse "extraConfig" in Shelley genesis.
+# The "ShelleyExtraConfig" string is present in the data section (Show instance,
+# JSON parser name) only when cardano-ledger-shelley >= 1.19 is linked in, so this
+# tests the feature itself rather than the node version.
+node_supports_genesis_injection() {
+  local node_bin rc=0
+
+  node_bin="$(command -v cardano-node)" || {
+    echo "cardano-node not found on PATH, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  }
+
+  grep -a -q "ShelleyExtraConfig" "$node_bin" || rc="$?"
+  if [ "$rc" -gt 1 ]; then
+    echo "Failed to inspect '$node_bin', line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+  return "$rc"
+}
+
+# Move "extraConfig" injection data in the Shelley genesis back to the legacy
+# "initialFunds"/"staking" fields when the node cannot parse "extraConfig".
+# The two formats are equivalent for embedded data, and the ledger errors out
+# when both sources are populated, so "extraConfig" must be removed after the move.
+# Only the embedded ("data") injection shape can be downgraded; fail loudly on any
+# other shape (e.g. file-based injection) or unknown "extraConfig" fields, rather
+# than leave "extraConfig" in place for the node to silently ignore. Absent or
+# empty injection entries keep the legacy field values.
+downgrade_genesis_injection() {
+  local genesis="${1:?Usage: downgrade_genesis_injection <genesis.json>}"
+
+  if node_supports_genesis_injection; then
+    return 0
+  fi
+
+  jq '
+    def unknown_fields: keys - ["initialFunds", "stakePools", "stakeCredentials"];
+
+    def inj_data(f):
+      if f == null or f == {} then null
+      elif (f | type) == "object" and (f | keys) == ["data"] and f.data != null then f.data
+      else error("cannot downgrade extraConfig: only embedded \"data\" injection is supported")
+      end;
+
+    # An absent "extraConfig" is null as well, and deleting it is then a no-op.
+    if .extraConfig == null then del(.extraConfig)
+    elif (.extraConfig | type) != "object"
+    then error("cannot downgrade extraConfig: expected an object, got \(.extraConfig | type)")
+    elif (.extraConfig | unknown_fields) != []
+    then error("cannot downgrade extraConfig: unexpected fields \(.extraConfig | unknown_fields)")
+    else
+      .initialFunds = (inj_data(.extraConfig.initialFunds) // .initialFunds // {})
+      | .staking.pools = (inj_data(.extraConfig.stakePools) // .staking.pools // {})
+      | .staking.stake = (inj_data(.extraConfig.stakeCredentials) // .staking.stake // {})
+      | del(.extraConfig)
+    end
+    ' "$genesis" > "${genesis}.tmp" \
+    || {
+      rm -f "${genesis}.tmp"
+      echo "Failed to downgrade extraConfig in '$genesis', line $LINENO in ${BASH_SOURCE[0]}" >&2
+      exit 1
+    }
+  mv "${genesis}.tmp" "$genesis"
+}
+
 create_genesis() {
   local start_time_shelley start_time
 
@@ -178,6 +252,8 @@ create_genesis() {
     .protocolParams.protocolVersion.major = $prot_ver
     | .maxLovelaceSupply = $max_supply
     ' "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
+
+  downgrade_genesis_injection "${STATE_CLUSTER}/shelley/genesis.json"
   rm -f "${STATE_CLUSTER}/create_staked/genesis.json"
 
   mv "$STATE_CLUSTER"/create_staked/genesis*.json "${STATE_CLUSTER}/shelley/"
