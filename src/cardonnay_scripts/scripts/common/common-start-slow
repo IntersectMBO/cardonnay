@@ -180,7 +180,11 @@ create_genesis() {
       "${STATE_CLUSTER}/shelley/genesis.dijkstra.json"
   fi
 
-  jq '.initialFunds = {}' \
+  # Shelley initial funds are not used in this setup (funds come from Byron).
+  # Newer cardano-cli (>= PR #1384) writes initial funds into "extraConfig"
+  # (ledger's streaming data injection) instead of "initialFunds", so drop
+  # that field as well.
+  jq '.initialFunds = {} | del(.extraConfig)' \
     "${STATE_CLUSTER}/shelley/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.tmp.json"
   mv -f "${STATE_CLUSTER}/shelley/genesis.tmp.json" "${STATE_CLUSTER}/shelley/genesis.json"
 }
