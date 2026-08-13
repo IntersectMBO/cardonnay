@@ -19,7 +19,8 @@ STATUS_STARTED = "status_started"
 DELAY_STATUS = "delay_stat"
 DELAY_LOCK = "delay.lock"
 STATE_CLUSTER_PREFIX = "state-cluster"
-STATE_CLUSTER_PREFIX_LEN = len("state-cluster")
+STATE_CLUSTER_PREFIX_LEN = len(STATE_CLUSTER_PREFIX)
+DELAY_VALID_SEC = 10
 WORKDIR_BASE = pl.Path("/var/tmp")
 WORKDIR_PREFIX = "cardonnay-of-"
 
@@ -32,8 +33,7 @@ def create_env_vars(workdir: pl.Path, instance_num: int) -> dict[str, str]:
 
 
 def set_env_vars(env: dict[str, str]) -> None:
-    for var_name, val in env.items():
-        os.environ[var_name] = val
+    os.environ.update(env)
 
 
 def get_workdir(workdir: ttypes.FileType) -> pl.Path:
@@ -66,10 +66,13 @@ def create_workdir(workdir: pl.Path) -> None:
 
 
 def get_running_instances(workdir: pl.Path) -> set[int]:
-    instances = {
-        int(s.parent.name[STATE_CLUSTER_PREFIX_LEN:])
-        for s in workdir.glob(f"{STATE_CLUSTER_PREFIX}*/supervisord.sock")
-    }
+    instances = set()
+    for s in workdir.glob(f"{STATE_CLUSTER_PREFIX}*/supervisord.sock"):
+        suffix = s.parent.name[STATE_CLUSTER_PREFIX_LEN:]
+        if suffix.isascii() and suffix.isdigit():
+            instances.add(int(suffix))
+        else:
+            LOGGER.warning(f"Unexpected state cluster dir name: {s.parent}")
     return instances
 
 
@@ -104,8 +107,10 @@ def get_delay_instances(workdir: pl.Path) -> set[int]:
     created yet, so it is not considered as properly "starting" yet.
     Or an instance can be in a state where it is stopping, but the supervisord.sock is still
     present, so it is not considered as properly stopped yet.
+
+    Side effects: stale delay files are removed and future-dated ones re-touched.
+    Call only while holding `DELAY_LOCK`.
     """
-    valid_time_sec = 10
     starting = set()
     sf_len = len(DELAY_STATUS)
     now = time.time()
@@ -116,14 +121,25 @@ def get_delay_instances(workdir: pl.Path) -> set[int]:
         except FileNotFoundError:
             continue
 
-        if now - mtime < valid_time_sec:
+        age = now - mtime
+        if age < -1:
+            # Mtime >1s in the future means the wall clock stepped back (assumes the mtime
+            # source shares this clock). Re-touch so the delay window stays bounded; on
+            # failure, still treat as freshly delayed (fail closed).
             try:
-                instance_num = int(sf.name[sf_len:])
-                starting.add(instance_num)
-            except ValueError:
+                sf.touch()
+            except OSError as excp:
+                LOGGER.warning(f"Cannot re-touch delay file '{sf}': {excp}")
+            age = 0
+
+        if age < DELAY_VALID_SEC:
+            suffix = sf.name[sf_len:]
+            if suffix.isascii() and suffix.isdigit():
+                starting.add(int(suffix))
+            else:
                 LOGGER.warning(f"Invalid status file name: {sf}")
         else:
-            sf.unlink()
+            sf.unlink(missing_ok=True)
 
     return starting
 
@@ -135,27 +151,48 @@ def create_delay_file(instance_num: int, workdir: pl.Path) -> None:
 
 
 def delay_instance(instance_num: int, workdir: pl.Path) -> bool:
-    """Delay the specified testnet instance to prevent concurrent access."""
+    """Delay the specified testnet instance to prevent concurrent access.
+
+    Returns False if the instance is already delayed or the delay cannot be created.
+    """
     create_workdir(workdir=workdir)
     lockfile = str(workdir / DELAY_LOCK)
-    with filelock.FileLock(lock_file=lockfile, timeout=2):
-        delay_instances = get_delay_instances(workdir=workdir)
-        if instance_num in delay_instances:
-            LOGGER.error(
-                f"There was a recent attempt to start/stop the instance number {instance_num}. "
-                "Re-try later."
-            )
-            return False
-        create_delay_file(instance_num=instance_num, workdir=workdir)
+    try:
+        with filelock.FileLock(lock_file=lockfile, timeout=2):
+            delay_instances = get_delay_instances(workdir=workdir)
+            if instance_num in delay_instances:
+                LOGGER.error(
+                    f"There was a recent attempt to start/stop the instance number "
+                    f"{instance_num}. Re-try later."
+                )
+                return False
+            create_delay_file(instance_num=instance_num, workdir=workdir)
+    except filelock.Timeout:
+        LOGGER.error(f"Failed to acquire lock '{lockfile}'. Re-try later.")  # noqa: TRY400
+        return False
+    except OSError as excp:
+        LOGGER.error(f"Failed to delay instance number {instance_num}: {excp}")  # noqa: TRY400
+        return False
 
     return True
 
 
 def undelay_instance(instance_num: int, workdir: pl.Path) -> bool:
-    """Remove the delay for the specified testnet instance."""
+    """Remove the delay for the specified testnet instance.
+
+    Best-effort cleanup: returns False if the delay file cannot be removed; the stale
+    delay then expires on its own within `DELAY_VALID_SEC` seconds.
+    """
     lockfile = str(workdir / DELAY_LOCK)
-    with filelock.FileLock(lock_file=lockfile, timeout=2):
-        status_file = workdir / f"{DELAY_STATUS}{instance_num}"
-        status_file.unlink(missing_ok=True)
+    try:
+        with filelock.FileLock(lock_file=lockfile, timeout=2):
+            status_file = workdir / f"{DELAY_STATUS}{instance_num}"
+            status_file.unlink(missing_ok=True)
+    except OSError as excp:
+        LOGGER.warning(
+            f"Failed to remove delay for instance number {instance_num}: {excp}; "
+            f"it expires automatically within {DELAY_VALID_SEC} sec."
+        )
+        return False
 
     return True
