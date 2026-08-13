@@ -187,29 +187,35 @@ def cmd_create(  # noqa: PLR0911, C901
     ca_utils.create_workdir(workdir=workdir_abs)
 
     lockfile = str(workdir_abs / ca_utils.DELAY_LOCK)
-    with filelock.FileLock(lock_file=lockfile, timeout=2):
-        avail_instances_gen = ca_utils.get_available_instances(workdir=workdir_abs)
-        delay_instances = ca_utils.get_delay_instances(workdir=workdir_abs)
-        if instance_num < 0:
-            for _ in range(ca_utils.MAX_INSTANCES + 1):
-                try:
-                    instance_num = next(avail_instances_gen)
-                except StopIteration:
-                    LOGGER.error("All instances are already in use.")  # noqa: TRY400
+    try:
+        with filelock.FileLock(lock_file=lockfile, timeout=2):
+            avail_instances_gen = ca_utils.get_available_instances(workdir=workdir_abs)
+            delay_instances = ca_utils.get_delay_instances(workdir=workdir_abs)
+            if instance_num < 0:
+                free_instance = next(
+                    (i for i in avail_instances_gen if i not in delay_instances), None
+                )
+                if free_instance is None:
+                    LOGGER.error("All instances are already in use.")
                     return 1
-                if instance_num not in delay_instances:
-                    break
-        elif instance_num not in avail_instances_gen:
-            LOGGER.error(f"Instance number {instance_num} is already in use.")
-            return 1
-        elif instance_num in delay_instances:
-            LOGGER.error(
-                f"There was a recent attempt to start/stop the instance number {instance_num}. "
-                "Re-try later."
-            )
-            return 1
+                instance_num = free_instance
+            elif instance_num not in avail_instances_gen:
+                LOGGER.error(f"Instance number {instance_num} is already in use.")
+                return 1
+            elif instance_num in delay_instances:
+                LOGGER.error(
+                    f"There was a recent attempt to start/stop the instance number "
+                    f"{instance_num}. Re-try later."
+                )
+                return 1
 
-        ca_utils.create_delay_file(instance_num=instance_num, workdir=workdir_abs)
+            ca_utils.create_delay_file(instance_num=instance_num, workdir=workdir_abs)
+    except filelock.Timeout:
+        LOGGER.error(f"Failed to acquire lock '{lockfile}'. Re-try later.")  # noqa: TRY400
+        return 1
+    except OSError as excp:
+        LOGGER.error(f"Failed to reserve testnet instance: {excp}")  # noqa: TRY400
+        return 1
 
     destdir = workdir_pl / f"cluster{instance_num}_{testnet_variant}"
     destdir_abs = destdir.absolute()
