@@ -51,6 +51,12 @@ get_block_interval_sec() {
     'if $co > 0 then ($sl / $co | ceil) else ($sl | ceil) end'
 }
 
+has_bls_support() {
+  cardano-cli dijkstra node key-gen-BLS --help > /dev/null 2>&1 || return 1
+  cardano-node run --help 2>&1 | grep -q -- '--shelley-bls-key' || return 1
+  return 0
+}
+
 cardano_cli_log() {
   : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
 
@@ -490,6 +496,69 @@ submit_votes() {
   sleep "${SUBMIT_DELAY}"
   if ! check_spend_success "${txins[@]}"; then
     echo "Failed to spend Tx inputs, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+}
+
+reregister_pools_with_bls() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+  : "${FAUCET_ADDR:?FAUCET_ADDR is required}"
+  : "${FAUCET_SKEY:?FAUCET_SKEY is required}"
+  : "${FEE:?FEE is required}"
+  : "${NETWORK_MAGIC:?NETWORK_MAGIC is required}"
+  : "${SUBMIT_DELAY:?SUBMIT_DELAY is required}"
+
+  local pool_dir cert_file
+  local -a cert_args=()
+  local -a pool_signing=()
+
+  for pool_dir in "${STATE_CLUSTER}"/nodes/node-pool*; do
+    [ -e "$pool_dir" ] || continue
+    cert_file="${pool_dir}/register.dijkstra.cert"
+    [ -e "$cert_file" ] || continue
+    cert_args+=( "--certificate-file" "$cert_file" )
+    pool_signing+=( \
+      "--signing-key-file" "${pool_dir}/owner-stake.skey" \
+      "--signing-key-file" "${pool_dir}/cold.skey" \
+    )
+  done
+
+  if [ "${#cert_args[@]}" -eq 0 ]; then
+    echo "No Dijkstra pool registration certs found, skipping BLS re-registration"
+    return
+  fi
+
+  echo "Re-registering pools with BLS keys"
+
+  local -a txins=()
+  local txin_amount=0
+
+  get_txins "${FAUCET_ADDR}" "${FEE}" txins txin_amount
+
+  local txout_amount="$((txin_amount - FEE))"
+  local reg_base="${STATE_CLUSTER}/pool-bls-reregistration"
+
+  cardano_cli_log dijkstra transaction build-raw \
+    --fee    "${FEE}" \
+    "${txins[@]}" \
+    "${cert_args[@]}" \
+    --tx-out "${FAUCET_ADDR}+${txout_amount}" \
+    --out-file "${reg_base}-tx.txbody"
+
+  cardano_cli_log dijkstra transaction sign \
+    --signing-key-file "${FAUCET_SKEY}" \
+    "${pool_signing[@]}" \
+    --testnet-magic    "${NETWORK_MAGIC}" \
+    --tx-body-file     "${reg_base}-tx.txbody" \
+    --out-file         "${reg_base}-tx.tx"
+
+  cardano_cli_log dijkstra transaction submit \
+    --tx-file "${reg_base}-tx.tx" \
+    --testnet-magic "${NETWORK_MAGIC}"
+
+  sleep "${SUBMIT_DELAY}"
+  if ! check_spend_success "${txins[@]}"; then
+    echo "Failed to spend Tx inputs for pool BLS re-registration, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
 }

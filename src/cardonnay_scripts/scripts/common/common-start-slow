@@ -371,6 +371,12 @@ _create_pool_node_keys() {
     --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey" \
     --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.skey"
 
+  if [ "$PROTOCOL_VERSION" -ge 12 ] && has_bls_support; then
+    cardano_cli_log dijkstra node key-gen-BLS \
+      --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.vkey" \
+      --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey"
+  fi
+
   cardano_cli_log compatible shelley stake-address stake-delegation-certificate \
     --stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
     --cold-verification-key-file  "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
@@ -427,6 +433,24 @@ _create_pool_registration() {
     --pool-relay-ipv4 "127.0.0.1" \
     --testnet-magic "$NETWORK_MAGIC" \
     --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/register.cert"
+
+  if [ -e "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" ]; then
+    cardano_cli_log dijkstra stake-pool registration-certificate \
+      --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
+      --vrf-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey" \
+      --bls-signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" \
+      --pool-pledge "$POOL_PLEDGE" \
+      --pool-margin 0.35 \
+      --pool-cost "$POOL_COST" \
+      --pool-reward-account-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey" \
+      --pool-owner-stake-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.vkey" \
+      --metadata-url "$metadata_url" \
+      --metadata-hash "$metadata_hash" \
+      --pool-relay-port "$pool_port" \
+      --pool-relay-ipv4 "127.0.0.1" \
+      --testnet-magic "$NETWORK_MAGIC" \
+      --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/register.dijkstra.cert"
+  fi
 }
 
 create_pools_files() {
@@ -1023,6 +1047,8 @@ hf_to_dijkstra() {
   local cur_era
   cur_era="$(get_era)"
   [ "$cur_era" = "Dijkstra" ] || { echo "Unexpected era '$cur_era' after HF to Dijkstra PV12, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+
+  reregister_pools_with_bls
 }
 
 main() {

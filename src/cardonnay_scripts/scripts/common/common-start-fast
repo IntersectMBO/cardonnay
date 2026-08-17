@@ -388,6 +388,12 @@ _create_pool_node_keys() {
   mv "${STATE_CLUSTER}/create_staked/pools/vrf${pool_ix}.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.skey"
   mv "${STATE_CLUSTER}/create_staked/pools/vrf${pool_ix}.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey"
 
+  if [ "$PROTOCOL_VERSION" -ge 12 ] && has_bls_support; then
+    cardano_cli_log dijkstra node key-gen-BLS \
+      --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.vkey" \
+      --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey"
+  fi
+
   echo "Generating Pool $pool_ix Secrets"
 
   cardano_cli_log conway address key-gen \
@@ -437,9 +443,17 @@ _create_pool_registration() {
   echo "$pool_port" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/port"
   echo "$POOL_PLEDGE" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/pledge"
 
-  cardano_cli_log conway stake-pool registration-certificate \
+  local reg_command_era="conway"
+  local -a bls_args=()
+  if [ "$PROTOCOL_VERSION" -ge 12 ] && [ -e "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" ]; then
+    reg_command_era="dijkstra"
+    bls_args=( "--bls-signing-key-file" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" )
+  fi
+
+  cardano_cli_log "$reg_command_era" stake-pool registration-certificate \
     --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
     --vrf-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey" \
+    "${bls_args[@]}" \
     --pool-pledge "$POOL_PLEDGE" \
     --pool-margin 0.35 \
     --pool-cost "$POOL_COST" \
