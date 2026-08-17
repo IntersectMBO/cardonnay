@@ -1,13 +1,14 @@
-import contextlib
 import json
 import logging
 import pathlib as pl
+import shlex
 import shutil
 
 import filelock
 
 import cardonnay_scripts
 from cardonnay import ca_utils
+from cardonnay import cli_control
 from cardonnay import colors
 from cardonnay import helpers
 from cardonnay import local_scripts
@@ -20,7 +21,7 @@ def write_env_vars(env: dict[str, str], workdir: pl.Path, instance_num: int) -> 
     """Write environment variables to a file for sourcing later."""
     sfile = workdir / f".source_cluster{instance_num}"
     sfile.unlink(missing_ok=True)
-    content = [f'export {var_name}="{val}"' for var_name, val in env.items()]
+    content = [f"export {var_name}={shlex.quote(val)}" for var_name, val in env.items()]
     sfile.write_text("\n".join(content))
 
 
@@ -59,14 +60,10 @@ def get_start_info(statedir: pl.Path, testnet_variant: str) -> structs.StartInfo
     instance_num = int(statedir.name[ca_utils.STATE_CLUSTER_PREFIX_LEN :])
     workdir = statedir.parent
 
-    start_pid = -1
+    start_pid = 0
     pidfile = workdir / f"start_cluster{instance_num}.pid"
     if pidfile.exists():
-        pid = 0
-        with contextlib.suppress(Exception):
-            pid = int(helpers.read_from_file(pidfile))
-        if pid:
-            start_pid = pid
+        start_pid = cli_control.read_valid_pid(pidfile=pidfile)
 
     start_logfile = None
     logfile = workdir / f"start_cluster{instance_num}.log"
@@ -77,7 +74,7 @@ def get_start_info(statedir: pl.Path, testnet_variant: str) -> structs.StartInfo
         instance=instance_num,
         type=testnet_variant,
         dir=statedir,
-        start_pid=start_pid if start_pid > 0 else None,
+        start_pid=start_pid or None,
         start_logfile=start_logfile,
     )
 
@@ -106,13 +103,19 @@ def testnet_start(
     logfile = workdir / f"start_cluster{instance_num}.log"
     logfile.unlink(missing_ok=True)
 
-    if background:
-        start_process = helpers.run_detached_command(
-            command=str(start_script), logfile=logfile, workdir=workdir
-        )
+    # Remove also for foreground start, so a stale PID file from an earlier
+    # failed background start cannot outlive it
+    pidfile = workdir / f"start_cluster{instance_num}.pid"
+    pidfile.unlink(missing_ok=True)
 
-        pidfile = workdir / f"start_cluster{instance_num}.pid"
-        pidfile.unlink(missing_ok=True)
+    if background:
+        try:
+            start_process = helpers.run_detached_command(
+                command=str(start_script), logfile=logfile, workdir=workdir
+            )
+        except OSError:
+            LOGGER.exception("Failed to start the testnet cluster")
+            return 1
         pidfile.write_text(str(start_process.pid))
 
         statedir = workdir / f"{ca_utils.STATE_CLUSTER_PREFIX}{instance_num}"
@@ -123,8 +126,8 @@ def testnet_start(
             f"`{start_script}`:{colors.BColors.ENDC}"
         )
         try:
-            helpers.run_command(command=str(start_script), workdir=workdir)
-        except RuntimeError:
+            helpers.run_command(command=[str(start_script)], workdir=workdir)
+        except (RuntimeError, OSError):
             LOGGER.exception("Failed to start the testnet cluster")
             return 1
 
