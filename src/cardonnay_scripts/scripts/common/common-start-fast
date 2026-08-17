@@ -14,6 +14,7 @@ readonly DREP_DELEGATED=500000000000
 readonly FEE=5000000
 readonly BYRON_INIT_SUPPLY=10020000000
 readonly TX_GENERATOR_MIN_FUNDS=5000000000000000
+readonly TX_FIREHOSE_MIN_FUNDS=5000000000000
 
 readonly INSTANCE_NUM="%%INSTANCE_NUM%%"
 readonly NUM_POOLS=%%NUM_POOLS%%
@@ -112,8 +113,18 @@ initialize_globals() {
   # shellcheck disable=SC1091
   source "${SCRIPT_DIR}/common.sh"
 
-  if is_truthy "${ENABLE_TX_GENERATOR:-}" && is_truthy "${ENABLE_TX_CENTRIFUGE:-}"; then
-    echo "ENABLE_TX_GENERATOR and ENABLE_TX_CENTRIFUGE are mutually exclusive, line $LINENO in ${BASH_SOURCE[0]}" >&2
+  local -a enabled_tx_tools=()
+  local tx_name tx_flag
+  for tx_name in ENABLE_TX_GENERATOR ENABLE_TX_CENTRIFUGE ENABLE_TX_FIREHOSE; do
+    tx_flag="${!tx_name:-}"
+    if is_truthy "$tx_flag"; then
+      enabled_tx_tools+=("$tx_name")
+    fi
+  done
+  if [ "${#enabled_tx_tools[@]}" -gt 1 ]; then
+    local joined
+    printf -v joined '%s, ' "${enabled_tx_tools[@]}"
+    echo "${joined%, } are mutually exclusive, line $LINENO in ${BASH_SOURCE[0]}" >&2
     exit 1
   fi
 
@@ -638,6 +649,7 @@ main() {
   use_genesis_mode
   setup_tx_generator "$TX_GENERATOR_MIN_FUNDS"
   setup_tx_centrifuge
+  setup_tx_firehose "$TX_FIREHOSE_MIN_FUNDS"
 
   : > "$START_CLUSTER_STATUS"
   echo "Cluster started 🚀"

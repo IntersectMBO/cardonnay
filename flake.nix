@@ -11,18 +11,23 @@
     cardano-node-tx-centrifuge = {
       url = "github:IntersectMBO/cardano-node?ref=bench/leios-11.0.1";
     };
+    # tx-firehose only, lives on yet another cardano-node branch.
+    cardano-node-tx-firehose = {
+      url = "github:IntersectMBO/cardano-node?ref=leios-prototype";
+    };
     flake-utils = {
       url = "github:numtide/flake-utils";
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, cardano-node, cardano-node-tx-centrifuge }:
+  outputs = { self, nixpkgs, flake-utils, cardano-node, cardano-node-tx-centrifuge, cardano-node-tx-firehose }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
           nodePkgs = cardano-node.packages.${system};
           centrifugePkgs = cardano-node-tx-centrifuge.packages.${system};
+          firehosePkgs = cardano-node-tx-firehose.packages.${system};
         in
         {
           devShells = rec {
@@ -40,6 +45,7 @@
                 nodePkgs.bech32
                 nodePkgs.tx-generator
                 centrifugePkgs.tx-centrifuge
+                firehosePkgs.tx-firehose
                 pkgs.bashInteractive
                 pkgs.python313
               ];
