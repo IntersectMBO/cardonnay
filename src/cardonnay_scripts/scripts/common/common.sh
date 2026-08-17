@@ -622,6 +622,21 @@ startsecs=5
 EoF
   fi
 
+  if is_truthy "${ENABLE_TX_FIREHOSE:-}"; then
+    cp "${SCRIPT_DIR}/run-tx-firehose" "${STATE_CLUSTER}"
+
+    cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
+
+[program:tx_firehose]
+command=./${STATE_CLUSTER_NAME}/run-tx-firehose
+stderr_logfile=./${STATE_CLUSTER_NAME}/tx-firehose.stderr
+stdout_logfile=./${STATE_CLUSTER_NAME}/tx-firehose.stdout
+autostart=false
+autorestart=false
+startsecs=5
+EoF
+  fi
+
   cat >> "${STATE_CLUSTER}/supervisor.conf" <<EoF
 
 [group:nodes]
@@ -1019,7 +1034,7 @@ use_genesis_mode() {
   supervisorctl -s unix:///"${SUPERVISORD_SOCKET_PATH}" restart nodes:
 }
 
-_fund_tx_gen() {
+_fund_address() {
   : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
   : "${FAUCET_ADDR:?FAUCET_ADDR is required}"
   : "${FAUCET_SKEY:?FAUCET_SKEY is required}"
@@ -1028,16 +1043,17 @@ _fund_tx_gen() {
 
   local addr="${1:?}"
   local fund_amount="${2:?}"
+  local label="${3:-fund-address}"
   local fee=500000
   local stop_txin_amount="$((fund_amount + fee))"
-  local tx_base="${STATE_CLUSTER}/shelley/fund-tx-generator"
+  local tx_base="${STATE_CLUSTER}/shelley/${label}"
   local addr_balance
   local -a txins=()
   local txin_amount=0
 
   addr_balance="$(get_address_balance --address "$addr")"
   if [ "$addr_balance" -ge "$fund_amount" ]; then
-    echo "Tx generator address already has enough funds: $addr_balance lovelace"
+    echo "Address '$addr' already has enough funds: $addr_balance lovelace"
     return
   fi
 
@@ -1172,7 +1188,7 @@ setup_tx_generator() {
   local fund_amount="${1:?}"
   local tps="${TX_TPS:-100}"
 
-  _fund_tx_gen "$(<"${STATE_CLUSTER}/shelley/genesis-utxo2.addr")" "$fund_amount"
+  _fund_address "$(<"${STATE_CLUSTER}/shelley/genesis-utxo2.addr")" "$fund_amount" "fund-tx-generator"
 
   _create_tx_gen_config \
     "${STATE_CLUSTER}/topology-bft1.json" \
@@ -1375,4 +1391,116 @@ setup_tx_centrifuge() {
   # The tx centrifuge setup takes time, so we wait for it to start submitting transactions before proceeding
   echo "Waiting for tx centrifuge to start submitting transactions"
   _wait_for_tx_centrifuge_tx
+}
+
+_create_tx_firehose_config() {
+  if [ $# -lt 4 ]; then
+    echo "Usage: _create_tx_firehose_config <node.socket> <signing.skey> <magic> <tps>" >&2
+    return 1
+  fi
+
+  local socket_path="$1"
+  local skey_file="$2"
+  local magic="$3"
+  local tps="$4"
+
+  jq -n \
+    --arg socket "$socket_path" \
+    --arg skey "$skey_file" \
+    --argjson magic "$magic" \
+    --argjson tps "$tps" \
+    '{
+      socket_path: $socket,
+      testnet_magic: $magic,
+      signing_key_file: $skey,
+      tps: $tps,
+      inputs_per_tx: 1,
+      outputs_per_tx: 1,
+      fee: 200000,
+      max_consecutive_errors: 50
+    }'
+}
+
+_wait_for_tx_firehose_log() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+
+  # tx-firehose writes its trace lines to stderr, unlike tx-generator / tx-centrifuge.
+  local logfile="${STATE_CLUSTER}/tx-firehose.stderr"
+  local _
+
+  for _ in {1..10}; do
+    if [ -f "$logfile" ]; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "Tx firehose log file was not created, line $LINENO in ${BASH_SOURCE[0]}" >&2
+  exit 1
+}
+
+_wait_for_tx_firehose_tx() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+
+  local logfile="${STATE_CLUSTER}/tx-firehose.stderr"
+  local attempts=360
+  local start_time elapsed_time
+  local success=0
+  local a
+
+  start_time="$EPOCHSECONDS"
+  for ((a=1; a<=attempts; a++)); do
+    if tail -n 100 "$logfile" | grep -q "TxFirehose.Submit.Success"; then
+      success=1
+      break
+    fi
+    sleep 20
+  done
+
+  elapsed_time="$((EPOCHSECONDS - start_time))"
+  if [ "$success" -eq 0 ]; then
+    echo "Tx firehose did not start submitting transactions after $elapsed_time seconds, line $LINENO in ${BASH_SOURCE[0]}" >&2
+    exit 1
+  fi
+  echo "Tx firehose started submitting transactions after $elapsed_time seconds"
+}
+
+setup_tx_firehose() {
+  if ! is_truthy "${ENABLE_TX_FIREHOSE:-}"; then
+    return 0
+  fi
+
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+  : "${SUPERVISORD_SOCKET_PATH:?SUPERVISORD_SOCKET_PATH is required}"
+  : "${NETWORK_MAGIC:?NETWORK_MAGIC is required}"
+
+  local fund_amount="${1:?}"
+  local tps="${TX_TPS:-100}"
+
+  # Unlike tx-generator / tx-centrifuge, tx-firehose does not need a genesis UTxO
+  # key -- it discovers its own funds by address query, so any funded key will do.
+  cardano_cli_log conway address key-gen \
+    --signing-key-file "${STATE_CLUSTER}/shelley/tx-firehose.skey" \
+    --verification-key-file "${STATE_CLUSTER}/shelley/tx-firehose.vkey"
+  cardano_cli_log conway address build \
+    --payment-verification-key-file "${STATE_CLUSTER}/shelley/tx-firehose.vkey" \
+    --out-file "${STATE_CLUSTER}/shelley/tx-firehose.addr" \
+    --testnet-magic "$NETWORK_MAGIC"
+
+  _fund_address \
+    "$(<"${STATE_CLUSTER}/shelley/tx-firehose.addr")" "$fund_amount" "fund-tx-firehose"
+
+  _create_tx_firehose_config \
+    "./pool1.socket" \
+    "./shelley/tx-firehose.skey" \
+    "$NETWORK_MAGIC" \
+    "$tps" > "${STATE_CLUSTER}/tx-firehose-config.json"
+
+  echo "Starting tx-firehose"
+  supervisorctl -s "unix:///${SUPERVISORD_SOCKET_PATH}" start tx_firehose || \
+    { echo "Failed to start tx firehose, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+  _wait_for_tx_firehose_log
+
+  # The tx firehose setup takes time, so we wait for it to start submitting transactions before proceeding
+  echo "Waiting for tx firehose to start submitting transactions"
+  _wait_for_tx_firehose_tx
 }

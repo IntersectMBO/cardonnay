@@ -11,7 +11,8 @@
         "PROTOCOL_VERSION": "if set, will use the specified protocol version (e.g., 11 for latest Conway, etc.)",
         "ENABLE_TX_GENERATOR": "if set, will configure and start tx-generator",
         "ENABLE_TX_CENTRIFUGE": "if set, will configure and start tx-centrifuge (higher-load, UTxO-reusing successor of tx-generator)",
-        "TX_TPS": "transactions-per-second rate ceiling for tx-generator / tx-centrifuge, default is 100",
+        "ENABLE_TX_FIREHOSE": "if set, will configure and start tx-firehose (single-node, push-based tx load generator over node-to-client)",
+        "TX_TPS": "transactions-per-second rate ceiling for tx-generator / tx-centrifuge / tx-firehose, default is 100",
         "USE_GENESIS_MODE": "if set, will switch to using GenesisMode and peer snapshot file"
     }
 }

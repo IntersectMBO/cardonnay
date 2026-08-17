@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+initialize() {
+  local retval=0
+  local socket_path state_cluster
+
+  if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+    echo "CARDANO_NODE_SOCKET_PATH is not set" >&2
+    retval=1
+  fi
+  if ! command -v tx-firehose &> /dev/null; then
+    echo "tx-firehose is not available in PATH" >&2
+    retval=1
+  fi
+  if [ "$retval" -ne 0 ]; then
+    exit "$retval"
+  fi
+
+  socket_path="$(readlink -m "${CARDANO_NODE_SOCKET_PATH:-}")"
+  state_cluster="${socket_path%/*}"
+  readonly FIREHOSE_CONFIG="${state_cluster}/tx-firehose-config.json"
+
+  if [ ! -f "$FIREHOSE_CONFIG" ]; then
+    echo "Firehose config file not found at $FIREHOSE_CONFIG" >&2
+    exit 1
+  fi
+
+  cd "$state_cluster"
+}
+
+wait_for_socket() {
+  for _ in {1..5}; do
+    if [ -S "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+      return 0
+    fi
+    echo "Waiting for socket ${CARDANO_NODE_SOCKET_PATH:-} to be available..."
+    sleep 5
+  done
+
+  echo "Socket ${CARDANO_NODE_SOCKET_PATH:-} is not available after waiting" >&2
+  exit 1
+}
+
+run_tx_firehose() {
+  local attempt=1
+  local socket testnet_magic signing_key tps inputs_per_tx outputs_per_tx fee max_errors
+
+  socket="$(jq -r '.socket_path' "$FIREHOSE_CONFIG")"
+  testnet_magic="$(jq -r '.testnet_magic' "$FIREHOSE_CONFIG")"
+  signing_key="$(jq -r '.signing_key_file' "$FIREHOSE_CONFIG")"
+  tps="$(jq -r '.tps' "$FIREHOSE_CONFIG")"
+  inputs_per_tx="$(jq -r '.inputs_per_tx' "$FIREHOSE_CONFIG")"
+  outputs_per_tx="$(jq -r '.outputs_per_tx' "$FIREHOSE_CONFIG")"
+  fee="$(jq -r '.fee' "$FIREHOSE_CONFIG")"
+  max_errors="$(jq -r '.max_consecutive_errors' "$FIREHOSE_CONFIG")"
+
+  while true; do
+    wait_for_socket
+
+    echo "Generating transactions..."
+    if tx-firehose \
+      --socket-path "$socket" \
+      --testnet-magic "$testnet_magic" \
+      --signing-key-file "$signing_key" \
+      --tps "$tps" \
+      --inputs-per-tx "$inputs_per_tx" \
+      --outputs-per-tx "$outputs_per_tx" \
+      --fee "$fee" \
+      --max-consecutive-errors "$max_errors"; then
+      attempt=1
+      sleep 15
+    else
+      if [ $attempt -ge 4 ]; then
+        echo "tx-firehose failed after $attempt attempts, exiting." >&2
+        exit 1
+      fi
+      echo "tx-firehose failed, retrying in 5 seconds..." >&2
+      attempt=$((attempt + 1))
+      sleep 5
+    fi
+  done
+}
+
+initialize
+run_tx_firehose
