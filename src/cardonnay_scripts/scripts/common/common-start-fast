@@ -257,7 +257,9 @@ create_genesis() {
     | .maxLovelaceSupply = $max_supply
     ' "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
 
-  downgrade_genesis_injection "${STATE_CLUSTER}/shelley/genesis.json"
+  if is_truthy "${GENESIS_DOWNGRADE:-}"; then
+    downgrade_genesis_injection "${STATE_CLUSTER}/shelley/genesis.json"
+  fi
   rm -f "${STATE_CLUSTER}/create_staked/genesis.json"
 
   mv "$STATE_CLUSTER"/create_staked/genesis*.json "${STATE_CLUSTER}/shelley/"
