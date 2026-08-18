@@ -22,13 +22,6 @@ readonly NODE_PORT_BASE=%%NODE_PORT_BASE%%
 readonly PORTS_PER_NODE=%%PORTS_PER_NODE%%
 readonly WEBSERVER_PORT=%%WEBSERVER_PORT%%
 
-# TODO: cannot hf directly to Dijkstra yet
-TMP_PROTOCOL_VERSION="$PROTOCOL_VERSION"
-if [ "$PROTOCOL_VERSION" -ge 12 ]; then
-  TMP_PROTOCOL_VERSION=11
-fi
-readonly TMP_PROTOCOL_VERSION
-
 initialize_globals() {
   if [ -z "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
     echo "CARDANO_NODE_SOCKET_PATH is not set" >&2
@@ -259,7 +252,7 @@ create_genesis() {
 
   jq \
     --argjson max_supply "$MAX_SUPPLY" \
-    --argjson prot_ver "$TMP_PROTOCOL_VERSION" '
+    --argjson prot_ver "$PROTOCOL_VERSION" '
     .protocolParams.protocolVersion.major = $prot_ver
     | .maxLovelaceSupply = $max_supply
     ' "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
@@ -345,7 +338,7 @@ edit_node_configs() {
     fi
 
     jq \
-      --argjson prot_ver "$TMP_PROTOCOL_VERSION" '
+      --argjson prot_ver "$PROTOCOL_VERSION" '
       if $prot_ver >= 12 then
         .TestDijkstraHardForkAtEpoch = 0
       else
@@ -387,6 +380,12 @@ _create_pool_node_keys() {
 
   mv "${STATE_CLUSTER}/create_staked/pools/vrf${pool_ix}.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.skey"
   mv "${STATE_CLUSTER}/create_staked/pools/vrf${pool_ix}.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey"
+
+  if [ "$PROTOCOL_VERSION" -ge 12 ] && has_bls_support; then
+    cardano_cli_log dijkstra node key-gen-BLS \
+      --verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.vkey" \
+      --signing-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey"
+  fi
 
   echo "Generating Pool $pool_ix Secrets"
 
@@ -437,9 +436,17 @@ _create_pool_registration() {
   echo "$pool_port" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/port"
   echo "$POOL_PLEDGE" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/pledge"
 
-  cardano_cli_log conway stake-pool registration-certificate \
+  local reg_command_era="conway"
+  local -a bls_args=()
+  if [ "$PROTOCOL_VERSION" -ge 12 ] && [ -e "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" ]; then
+    reg_command_era="dijkstra"
+    bls_args=( "--bls-signing-key-file" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" )
+  fi
+
+  cardano_cli_log "$reg_command_era" stake-pool registration-certificate \
     --cold-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey" \
     --vrf-verification-key-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey" \
+    "${bls_args[@]}" \
     --pool-pledge "$POOL_PLEDGE" \
     --pool-margin 0.35 \
     --pool-cost "$POOL_COST" \
@@ -592,43 +599,6 @@ register_entities() {
   fi
 }
 
-hf_to_dijkstra() {
-  if [ "$PROTOCOL_VERSION" -lt 12 ]; then
-    echo "Skipping HF to Dijkstra PV12 as PROTOCOL_VERSION is set to $PROTOCOL_VERSION"
-    return
-  fi
-
-  echo "TODO: remove \`hf_to_dijkstra\` function once \`TestDijkstraHardForkAtEpoch\` fully works" >&2
-
-  local cur_epoch="${1:?}"
-
-  echo "Submitting hard fork proposal to update to Dijkstra PV12"
-
-  local pv12_hf_base="${STATE_CLUSTER}/governance_data/hardfork_pv12_action"
-  local pv12_hf_action="${pv12_hf_base}_action"
-
-  create_and_submit_hf_action "$pv12_hf_action" "latest" 12
-
-  PV12_HF_ACTION_TXID="$(cardano_cli_log conway transaction txid \
-    --output-text --tx-body-file "${pv12_hf_action}-tx.txbody")"
-  readonly PV12_HF_ACTION_TXID
-
-  vote_on_action "$PV12_HF_ACTION_TXID" "$pv12_hf_action" "yes" "yes"
-  submit_votes "${pv12_hf_base}_votes" "$pv12_hf_action"
-
-  echo "Waiting for Dijkstra PV12 to start"
-  wait_for_epoch "$((cur_epoch + 2))"
-
-  save_protocol_params "$PPARAMS_FILE"
-  local cur_protver
-  cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
-  [ "$cur_protver" = 12 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
-
-  local cur_era
-  cur_era="$(get_era)"
-  [ "$cur_era" = "Dijkstra" ] || { echo "Unexpected era '$cur_era' after HF to Dijkstra PV12, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
-}
-
 main() {
   initialize_globals
   setup_state_cluster "${STATE_CLUSTER}/create_staked"
@@ -645,7 +615,6 @@ main() {
   start_cluster_nodes
   start_optional_services
   register_entities
-  hf_to_dijkstra "$(get_epoch)"
   use_genesis_mode
   setup_tx_generator "$TX_GENERATOR_MIN_FUNDS"
   setup_tx_centrifuge

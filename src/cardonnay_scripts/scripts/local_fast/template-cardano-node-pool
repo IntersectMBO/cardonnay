@@ -19,6 +19,10 @@ args=( \
   "$@" \
 )
 
+if [ -f ../nodes/node-pool%%POOL_NUM%%/bls.skey ]; then
+  args+=( --shelley-bls-key ../nodes/node-pool%%POOL_NUM%%/bls.skey )
+fi
+
 echo "Starting cardano-node run with PID $$ in db-pool%%POOL_NUM%% directory:"
 echo "cardano-node ${args[*]}"
 exec cardano-node "${args[@]}"
