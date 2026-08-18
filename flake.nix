@@ -28,6 +28,15 @@
           nodePkgs = cardano-node.packages.${system};
           centrifugePkgs = cardano-node-tx-centrifuge.packages.${system};
           firehosePkgs = cardano-node-tx-firehose.packages.${system};
+          venvShellHook = ''
+            echo "Setting up environment..."
+            [ -e .nix_venv ] || python3 -m venv .nix_venv
+            source .nix_venv/bin/activate
+            export PYTHONPATH=$(echo "$VIRTUAL_ENV"/lib/python3*/site-packages):"$PYTHONPATH"
+            python3 -m pip install --require-virtualenv --upgrade -e .
+            source completions/cardonnay.bash-completion
+            echo "Environment ready."
+          '';
         in
         {
           devShells = rec {
@@ -44,20 +53,22 @@
                 nodePkgs.cardano-submit-api
                 nodePkgs.bech32
                 nodePkgs.tx-generator
-                centrifugePkgs.tx-centrifuge
-                firehosePkgs.tx-firehose
                 pkgs.bashInteractive
                 pkgs.python313
               ];
-              shellHook = ''
-                echo "Setting up environment..."
-                [ -e .nix_venv ] || python3 -m venv .nix_venv
-                source .nix_venv/bin/activate
-                export PYTHONPATH=$(echo "$VIRTUAL_ENV"/lib/python3*/site-packages):"$PYTHONPATH"
-                python3 -m pip install --require-virtualenv --upgrade -e .
-                source completions/cardonnay.bash-completion
-                echo "Environment ready."
-              '';
+              shellHook = venvShellHook;
+            };
+            tx-centrifuge = pkgs.mkShell {
+              nativeBuildInputs = venv.nativeBuildInputs ++ [
+                centrifugePkgs.tx-centrifuge
+              ];
+              shellHook = venvShellHook;
+            };
+            tx-firehose = pkgs.mkShell {
+              nativeBuildInputs = venv.nativeBuildInputs ++ [
+                firehosePkgs.tx-firehose
+              ];
+              shellHook = venvShellHook;
             };
             # Use 'venv' directly as 'default'
             default = venv;
