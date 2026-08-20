@@ -700,8 +700,10 @@ _register_governance_in_conway() {
 
   if ! is_truthy "${NO_CC:-}"; then
     local cc_size
+    # `grep -c` exits 1 when it counts zero, which under `errexit` would abort here instead of
+    # reaching the diagnostic below.
     cc_size="$(cardano-cli conway query committee-state --active --testnet-magic "$NETWORK_MAGIC" |
-      grep -c '"status": "Active"')"
+      grep -c '"status": "Active"' || true)"
     [ "$cc_size" -ge "$NUM_CC" ] || \
       { echo "The CC members were not registered, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
   fi
