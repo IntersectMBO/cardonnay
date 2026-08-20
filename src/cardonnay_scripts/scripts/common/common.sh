@@ -53,7 +53,7 @@ get_block_interval_sec() {
 
 has_bls_support() {
   cardano-cli dijkstra node key-gen-BLS --help > /dev/null 2>&1 || return 1
-  cardano-node run --help 2>&1 | grep -q -- '--shelley-bls-key' || return 1
+  grep -q -- '--shelley-bls-key' < <(cardano-node run --help 2>&1) || return 1
   return 0
 }
 
@@ -72,10 +72,13 @@ cardano_cli_log() {
 check_spend_success() {
   : "${NETWORK_MAGIC:?NETWORK_MAGIC is required}"
 
-  local _
+  local _ utxo_out retval
   for _ in {1..10}; do
-    if ! cardano_cli_log latest query utxo "$@" \
-      --testnet-magic "${NETWORK_MAGIC}" --output-text | grep -q lovelace; then
+    # Capture the query separately from the match. Folding both into one condition makes a
+    # failing query indistinguishable from an empty UTxO, reporting the inputs as spent.
+    utxo_out="$(cardano_cli_log latest query utxo "$@" \
+      --testnet-magic "${NETWORK_MAGIC}" --output-text)" && retval=0 || retval="$?"
+    if [ "$retval" -eq 0 ] && ! grep -q lovelace <<< "$utxo_out"; then
       return 0
     fi
     sleep 6
@@ -1231,7 +1234,7 @@ _wait_for_tx_gen_tx() {
 
   start_time="$EPOCHSECONDS"
   for ((a=1; a<=attempts; a++)); do
-    if tail -n 100 "$logfile" | grep -q "SubmissionClientReplyTxIds"; then
+    if grep -q "SubmissionClientReplyTxIds" < <(tail -n 100 "$logfile"); then
       success=1
       break
     fi
@@ -1400,7 +1403,7 @@ _wait_for_tx_centrifuge_tx() {
   start_time="$EPOCHSECONDS"
   for ((a=1; a<=attempts; a++)); do
     # The builder emits a `NewTx` trace (severity Info) for every transaction it assembles.
-    if tail -n 100 "$logfile" | grep -q "NewTx"; then
+    if grep -q "NewTx" < <(tail -n 100 "$logfile"); then
       success=1
       break
     fi
@@ -1518,7 +1521,7 @@ _wait_for_tx_firehose_tx() {
 
   start_time="$EPOCHSECONDS"
   for ((a=1; a<=attempts; a++)); do
-    if tail -n 100 "$logfile" | grep -q "TxFirehose.Submit.Success"; then
+    if grep -q "TxFirehose.Submit.Success" < <(tail -n 100 "$logfile"); then
       success=1
       break
     fi
