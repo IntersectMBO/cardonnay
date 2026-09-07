@@ -477,14 +477,10 @@ register_entities() {
 
   echo "Re-registering pools, creating CC members and DReps"
 
-  local command_era="conway"
-  if save_protocol_params "$PPARAMS_FILE"; then
-    local cur_protver
-    cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
-    if [ "$cur_protver" -ge 12 ]; then
-      command_era="dijkstra"
-    fi
-  fi
+  save_protocol_params "$PPARAMS_FILE" || true
+
+  local command_era
+  command_era="$(get_command_era)"
 
   local -a genesis_signing=()
   local skey
