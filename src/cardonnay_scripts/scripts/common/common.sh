@@ -185,6 +185,28 @@ get_era() {
   cardano_cli_log latest query tip --testnet-magic "${NETWORK_MAGIC}" | jq -r '.era'
 }
 
+get_command_era() {
+  # The era command group to use for building Txs on the running cluster.
+  #
+  # `cardano-cli latest` is pinned to the newest *stable* era (Conway in cardano-cli 11.2.x),
+  # so it lags behind an experimental era like Dijkstra. Building with the wrong era group
+  # produces Tx CBOR in the wrong format -- a Conway Tx carries an `isValid` field that the
+  # Dijkstra ledger interprets as a phase-2 validation tag, rejecting the Tx with
+  # `ValidationTagMismatch Phase2Invalid PassedUnexpectedly`.
+  local era era_cmd
+
+  era="$(get_era)" || { echo "latest"; return 0; }
+  era_cmd="${era,,}"
+
+  # Fall back to `latest` for eras that have no dedicated command group (pre-Conway ones
+  # are only reachable through `cardano-cli compatible`).
+  if cardano-cli "$era_cmd" --help > /dev/null 2>&1; then
+    echo "$era_cmd"
+  else
+    echo "latest"
+  fi
+}
+
 get_node_version() {
   local version _
   read -r _ version _ < <(cardano-node --version 2>/dev/null)
@@ -1133,20 +1155,23 @@ _fund_address() {
 
   local txout_amount="$((txin_amount - stop_txin_amount))"
 
-  cardano_cli_log latest transaction build-raw \
+  local command_era
+  command_era="$(get_command_era)"
+
+  cardano_cli_log "$command_era" transaction build-raw \
     --fee    "$fee" \
     "${txins[@]}" \
     --tx-out "${addr}+${fund_amount}" \
     --tx-out "${FAUCET_ADDR}+${txout_amount}" \
     --out-file "${tx_base}-tx.txbody"
 
-  cardano_cli_log latest transaction sign \
+  cardano_cli_log "$command_era" transaction sign \
     --signing-key-file "${FAUCET_SKEY}" \
     --testnet-magic    "${NETWORK_MAGIC}" \
     --tx-body-file     "${tx_base}-tx.txbody" \
     --out-file         "${tx_base}-tx.tx"
 
-  cardano_cli_log latest transaction submit \
+  cardano_cli_log "$command_era" transaction submit \
     --tx-file "${tx_base}-tx.tx" \
     --testnet-magic "${NETWORK_MAGIC}"
 
