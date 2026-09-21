@@ -9,6 +9,7 @@
         "NO_CC": "if set, will not create committee",
         "DRY_RUN": "if set, will not start the cluster",
         "PROTOCOL_VERSION": "if set, will use the specified protocol version (e.g., 11 for latest Conway, etc.)",
+        "POOLS_IN_GENESIS": "if set, pool parameters are written into the genesis instead of being submitted in a pool re-registration Tx; workaround for pool re-registration failing with 'VRFKeyHashAlreadyRegistered' on testnets that start in Dijkstra",
         "ENABLE_TX_GENERATOR": "if set, will configure and start tx-generator",
         "ENABLE_TX_CENTRIFUGE": "if set, will configure and start tx-centrifuge (higher-load, UTxO-reusing successor of tx-generator)",
         "ENABLE_TX_FIREHOSE": "if set, will configure and start tx-firehose (single-node, push-based tx load generator over node-to-client)",
