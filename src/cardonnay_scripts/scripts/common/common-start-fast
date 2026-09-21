@@ -280,7 +280,11 @@ get_genesis_data() {
   readonly DREP_DEPOSIT
   GOV_ACTION_DEPOSIT="$(jq '.govActionDeposit' < "${STATE_CLUSTER}/shelley/genesis.conway.json")"
   readonly GOV_ACTION_DEPOSIT
+}
 
+# Hash the genesis files. Must run after the last modification of any of them,
+# as the hashes are recorded in the node configs.
+get_genesis_hashes() {
   BYRON_GENESIS_HASH="$(cardano_cli_log byron genesis print-genesis-hash --genesis-json \
     "${STATE_CLUSTER}/byron/genesis.json")"
   readonly BYRON_GENESIS_HASH
@@ -427,6 +431,18 @@ _create_pool_node_keys() {
     --out-file "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/owner-stake.deleg.cert"
 }
 
+# The era of the pool registration certificate. Dijkstra-era certs can carry the
+# pool's BLS key, Conway-era ones cannot.
+get_pool_reg_era() {
+  local pool_ix="${1:?}"
+
+  if [ "$PROTOCOL_VERSION" -ge 12 ] && [ -e "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" ]; then
+    echo "dijkstra"
+  else
+    echo "conway"
+  fi
+}
+
 _create_pool_registration() {
   local pool_ix="${1:?}"
   local metadata_url="http://localhost:${WEBSERVER_PORT}/pool${pool_ix}.json"
@@ -438,10 +454,10 @@ _create_pool_registration() {
   echo "$pool_port" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/port"
   echo "$POOL_PLEDGE" > "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/pledge"
 
-  local reg_command_era="conway"
+  local reg_command_era
+  reg_command_era="$(get_pool_reg_era "$pool_ix")"
   local -a bls_args=()
-  if [ "$PROTOCOL_VERSION" -ge 12 ] && [ -e "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" ]; then
-    reg_command_era="dijkstra"
+  if [ "$reg_command_era" = "dijkstra" ]; then
     bls_args=( "--bls-signing-key-file" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/bls.skey" )
   fi
 
@@ -471,11 +487,96 @@ create_pools_files() {
   done
 }
 
+# Whether the pools are set up through their genesis entries instead of a
+# re-registration Tx. Opt-in through `POOLS_IN_GENESIS`, so that the default
+# path stays the one that is tested.
+#
+# This works around a ledger issue that breaks pool re-registration in Dijkstra:
+# the Dijkstra POOL rule expects every registered pool's VRF key hash to have an
+# occurrence recorded in `psVRFKeyHashes`, but genesis staking injection records
+# none. The map is populated only by the Conway PV11 hardfork and by the
+# Conway -> Dijkstra translation, and a cluster that starts in Dijkstra at slot 0
+# runs neither. Re-registering a pool that came from genesis therefore fails with
+# `VRFKeyHashAlreadyRegistered`, even though the pool re-registers with the very
+# VRF key it is already using.
+#
+# Drop this, `inject_pools_into_genesis` and its call site once the ledger
+# populates `psVRFKeyHashes` on genesis injection.
+pools_in_genesis() {
+  is_truthy "${POOLS_IN_GENESIS:-}"
+}
+
+# Write the full pool parameters - metadata, relays, pledge, owners, BLS key -
+# into the genesis pool entries, so that the pools need no re-registration Tx.
+inject_pools_into_genesis() {
+  pools_in_genesis || return 0
+
+  local genesis="${STATE_CLUSTER}/shelley/genesis.json"
+  local txbody="${STATE_CLUSTER}/shelley/pool-params.txbody"
+  local params="${STATE_CLUSTER}/shelley/pool-params.json"
+  local reg_era i
+  local -a cert_args=()
+
+  for ((i=1; i<="${NUM_POOLS:?}"; i++)); do
+    cert_args+=( "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/register.cert" )
+  done
+  reg_era="$(get_pool_reg_era 1)"
+
+  # The pool parameters exist only as CBOR inside the registration certificates.
+  # Wrap the certificates in a throw-away Tx body, the only input that
+  # `debug transaction view` accepts, to get them as JSON. That is the ledger's
+  # own encoding of `StakePoolParams`, which is what the genesis parser expects,
+  # so the parameters can be dropped into the genesis entries verbatim.
+  cardano_cli_log "$reg_era" transaction build-raw \
+    --tx-in "0000000000000000000000000000000000000000000000000000000000000000#0" \
+    --fee 0 \
+    "${cert_args[@]}" \
+    --out-file "$txbody"
+
+  cardano_cli_log debug transaction view --tx-body-file "$txbody" --output-json > "$params"
+
+  # Keep the pools in whichever field `create_genesis` left them in; the
+  # "extraConfig" injection and the legacy "staking" fields use the same
+  # encoding for pool parameters.
+  jq \
+    --argjson num_pools "$NUM_POOLS" \
+    --slurpfile params "$params" '
+    def pool_params:
+      [$params[0].certificates[]? | .["Pool registration"]?["pool params"]? | select(. != null)];
+
+    def patch(f):
+      reduce pool_params[] as $p (.;
+        if (getpath(f)[$p.poolId] | type) != "object"
+        then error("pool \($p.poolId) is not registered in the genesis")
+        else setpath(f + [$p.poolId]; $p)
+        end);
+
+    if (pool_params | length) != $num_pools
+    then error("expected \($num_pools) pool registration certificates, got \(pool_params | length)")
+    elif (.extraConfig.stakePools.data | type) == "object"
+    then patch(["extraConfig", "stakePools", "data"])
+    elif (.staking.pools | type) == "object"
+    then patch(["staking", "pools"])
+    else error("no genesis pools to patch")
+    end
+    ' "$genesis" > "${genesis}.tmp" \
+    || {
+      rm -f "${genesis}.tmp"
+      echo "Failed to inject pool parameters into '$genesis', line $LINENO in ${BASH_SOURCE[0]}" >&2
+      exit 1
+    }
+  mv "${genesis}.tmp" "$genesis"
+}
+
 register_entities() {
   echo "Sleeping for initial Tx submission delay of $TX_SUBMISSION_DELAY seconds"
   sleep "$TX_SUBMISSION_DELAY"
 
-  echo "Re-registering pools, creating CC members and DReps"
+  if pools_in_genesis; then
+    echo "Registering pool owners, creating CC members and DReps"
+  else
+    echo "Re-registering pools, creating CC members and DReps"
+  fi
 
   save_protocol_params "$PPARAMS_FILE" || true
 
@@ -516,13 +617,23 @@ register_entities() {
       "--tx-out" "$(<"${STATE_CLUSTER}/nodes/node-pool${i}/owner.addr")+${POOL_PLEDGE}" \
       "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/stake.reg.cert" \
       "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/stake-reward.reg.cert" \
-      "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/register.cert" \
-      "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/owner-stake.deleg.cert" \
     )
     pool_signing+=( \
       "--signing-key-file" "${STATE_CLUSTER}/nodes/node-pool${i}/owner-stake.skey" \
       "--signing-key-file" "${STATE_CLUSTER}/nodes/node-pool${i}/reward.skey" \
-      "--signing-key-file" "${STATE_CLUSTER}/nodes/node-pool${i}/cold.skey" \
+    )
+    # When the pool parameters are not in the genesis, the pool is registered by
+    # this Tx, and its registration certificate needs a cold key witness.
+    if ! pools_in_genesis; then
+      pool_args+=( \
+        "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/register.cert" \
+      )
+      pool_signing+=( \
+        "--signing-key-file" "${STATE_CLUSTER}/nodes/node-pool${i}/cold.skey" \
+      )
+    fi
+    pool_args+=( \
+      "--certificate-file" "${STATE_CLUSTER}/nodes/node-pool${i}/owner-stake.deleg.cert" \
     )
   done
 
@@ -607,9 +718,11 @@ main() {
   create_committee_keys_in_genesis
   create_genesis_utxos
   get_genesis_data
-  edit_node_configs
   create_bft_nodes_files
   create_pools_files
+  inject_pools_into_genesis
+  get_genesis_hashes
+  edit_node_configs
   create_dreps_files
   create_cluster_scripts
   start_cluster_nodes
