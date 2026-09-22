@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Sourced by `start-cluster`. Many variables set here are consumed by functions
+# in `common.sh`, or are passed to them by name (nameref), which shellcheck
+# cannot see from this file alone.
+# shellcheck disable=SC2034
+
 # Cardano local cluster startup script
 # This script sets up and starts a local Cardano test cluster, bootstrapping it through
 # all eras from Byron to Conway, registering pools and governance entities.
