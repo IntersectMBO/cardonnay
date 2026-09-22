@@ -22,6 +22,13 @@ repos:
   rev: v0.11.0.1
   hooks:
   - id: shellcheck
+  # The scripts and templates without an extension are not executable, so
+  # `identify` cannot tag them as shell through their shebang and the hook
+  # above skips them. Select them by path instead.
+  - id: shellcheck
+    alias: shellcheck-noext
+    types: [text]
+    files: '^(\.source\.dev|src/cardonnay_scripts/scripts/[^/]+/[^./]+)$'
 - repo: https://github.com/igorshubovych/markdownlint-cli
   rev: v0.47.0
   hooks:

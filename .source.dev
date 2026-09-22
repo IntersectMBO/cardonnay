@@ -11,12 +11,13 @@ _ROOT_DIR_CARDONNAY="$(readlink -m "${BASH_SOURCE[0]}/..")"
 
 # Activate virtual environment
 if [ -z "${VIRTUAL_ENV:-}" ] && [ -e "$_ROOT_DIR_CARDONNAY/.venv/bin/activate" ]; then
-  # shellcheck disable=SC2091
+  # shellcheck source=/dev/null
   source "$_ROOT_DIR_CARDONNAY/.venv/bin/activate"
 fi
 
 # Load bash completions for cardonnay
 if ! command -v _cardonnay_completion >/dev/null 2>&1 && command -v cardonnay >/dev/null 2>&1; then
+  # shellcheck source=/dev/null
   source "$_ROOT_DIR_CARDONNAY/completions/cardonnay.bash-completion"
 fi
 
