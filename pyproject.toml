@@ -44,7 +44,8 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["cardonnay", "cardonnay_scripts"]
+include = ["cardonnay", "cardonnay_scripts*"]
+namespaces = true
 
 [tool.setuptools.package-data]
 "cardonnay_scripts" = ["scripts/**/*"]
