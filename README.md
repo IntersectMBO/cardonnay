@@ -90,7 +90,7 @@ This will provide a fully set-up environment, including Python, Cardano binaries
 
 ---
 
-### Option 2: Using `pip`
+### Option 2: Using `make`
 
 Ensure the following dependencies are installed and available in your `PATH`:
 
@@ -100,15 +100,14 @@ Ensure the following dependencies are installed and available in your `PATH`:
 - `cardano-cli`
 - optional: `cardano-submit-api`
 
-Then install **Cardonnay** in a virtual environment:
+Then install **Cardonnay** into a virtual environment (`.venv`) and activate it:
 
 ```sh
-# Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+# Create the virtual environment and install Cardonnay
+make install
 
-# Install Cardonnay
-pip install -U --require-virtualenv cardonnay
+# Activate the virtual environment
+source .venv/bin/activate
 
 # (Optional) Enable shell completions for Bash
 source completions/cardonnay.bash-completion
