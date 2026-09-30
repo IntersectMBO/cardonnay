@@ -18,7 +18,7 @@ It supports multiple preconfigured testnet types and makes it easy to inspect an
 ### 1. Create a `local_fast` testnet
 
 ```sh
-$ cardonnay create -t local_fast
+$ cardonnay create
 Starting the testnet cluster with `/var/tmp/cardonnay-of-user/cluster0_local_fast/start-cluster`:
 [...]
 Cluster started 🚀

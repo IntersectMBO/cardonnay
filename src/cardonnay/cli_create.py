@@ -163,7 +163,7 @@ def cmd_create(  # noqa: PLR0911, C901
     """Create a testnet cluster with the specified parameters."""
     scripts_base = pl.Path(str(cardonnay_scripts.SCRIPTS_ROOT))
 
-    if listit or not testnet_variant:
+    if listit:
         return print_available_testnets(scripts_base=scripts_base, verbose=bool(verbose))
 
     scriptsdir = scripts_base / testnet_variant
