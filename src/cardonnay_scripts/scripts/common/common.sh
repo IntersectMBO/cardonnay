@@ -588,6 +588,45 @@ reregister_pools_with_bls() {
   fi
 }
 
+# Hard fork to Dijkstra PV12 through a governance action, and re-register the
+# pools with their BLS keys once the cluster is in Dijkstra. Sets the global
+# `PV12_HF_ACTION_TXID`, for chaining the next hard fork action.
+hard_fork_to_dijkstra() {
+  : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
+  : "${PPARAMS_FILE:?PPARAMS_FILE is required}"
+
+  local cur_epoch="${1:?}"
+  local prev_txid="${2:-}"
+
+  echo "Submitting hard fork proposal to update to Dijkstra PV12"
+
+  local pv12_hf_base="${STATE_CLUSTER}/governance_data/hardfork_pv12_action"
+  local pv12_hf_action="${pv12_hf_base}_action"
+
+  create_and_submit_hf_action "$pv12_hf_action" "latest" 12 "$prev_txid"
+
+  PV12_HF_ACTION_TXID="$(cardano_cli_log conway transaction txid \
+    --output-text --tx-body-file "${pv12_hf_action}-tx.txbody")"
+  readonly PV12_HF_ACTION_TXID
+
+  vote_on_action "$PV12_HF_ACTION_TXID" "$pv12_hf_action" "yes" "yes"
+  submit_votes "${pv12_hf_base}_votes" "$pv12_hf_action"
+
+  echo "Waiting for Dijkstra PV12 to start"
+  wait_for_epoch "$((cur_epoch + 2))"
+
+  save_protocol_params "$PPARAMS_FILE"
+  local cur_protver
+  cur_protver="$(jq '.protocolVersion.major' < "$PPARAMS_FILE")"
+  [ "$cur_protver" = 12 ] || { echo "Unexpected protocol version '$cur_protver' on line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+
+  local cur_era
+  cur_era="$(get_era)"
+  [ "$cur_era" = "Dijkstra" ] || { echo "Unexpected era '$cur_era' after HF to Dijkstra PV12, line $LINENO in ${BASH_SOURCE[0]}" >&2; exit 1; }
+
+  reregister_pools_with_bls
+}
+
 configure_supervisor() {
   : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
   : "${STATE_CLUSTER_NAME:?STATE_CLUSTER_NAME is required}"
