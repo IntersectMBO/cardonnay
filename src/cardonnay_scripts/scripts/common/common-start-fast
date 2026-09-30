@@ -416,8 +416,8 @@ create_pools_files() {
 }
 
 # Whether the pools are set up through their genesis entries instead of a
-# re-registration Tx. Opt-in through `POOLS_IN_GENESIS`, so that the default
-# path stays the one that is tested.
+# re-registration Tx. This is the default; set `NO_POOLS_IN_GENESIS` to
+# re-register the pools through a Tx instead.
 #
 # This works around a ledger issue that breaks pool re-registration in Dijkstra:
 # the Dijkstra POOL rule expects every registered pool's VRF key hash to have an
@@ -431,7 +431,7 @@ create_pools_files() {
 # Drop this, `inject_pools_into_genesis` and its call site once the ledger
 # populates `psVRFKeyHashes` on genesis injection.
 pools_in_genesis() {
-  is_truthy "${POOLS_IN_GENESIS:-}"
+  ! is_truthy "${NO_POOLS_IN_GENESIS:-}"
 }
 
 # Write the full pool parameters - metadata, relays, pledge, owners, BLS key -
