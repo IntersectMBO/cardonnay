@@ -133,5 +133,5 @@ Set these env vars **before** `cardonnay create`:
 ```sh
 export DBSYNC_SCHEMA_DIR=/path/to/cardano-db-sync/schema
 export DBSYNC_ALLOW_PRIVATE_OFFCHAIN_URLS=true
-cardonnay create -t local_fast
+cardonnay create
 ```

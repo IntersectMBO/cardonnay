@@ -167,7 +167,7 @@ def cmd_create(  # noqa: PLR0911, C901
         return print_available_testnets(scripts_base=scripts_base, verbose=bool(verbose))
 
     scriptsdir = scripts_base / testnet_variant
-    if not scriptsdir.exists():
+    if scriptsdir.parent != scripts_base or not (scriptsdir / "start-cluster").is_file():
         LOGGER.error(f"Testnet variant '{testnet_variant}' does not exist in '{scripts_base}'.")
         return 1
 
