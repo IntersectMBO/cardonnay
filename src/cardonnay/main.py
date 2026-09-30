@@ -73,7 +73,14 @@ def main() -> None:
 
 
 @main.command(help="Create a local testnet.")
-@click.option("-t", "--testnet-variant", type=str, help="Testnet variant to use.")
+@click.option(
+    "-t",
+    "--testnet-variant",
+    type=str,
+    default="local_fast",
+    show_default=True,
+    help="Testnet variant to use.",
+)
 @click.option(
     "-c", "--comment", type=str, callback=validate_comment, help="Comment for the testnet."
 )
@@ -124,11 +131,6 @@ def create(
     verbose: int,
     work_dir: str,
 ) -> None:
-    # Check if no args were passed other than the command itself
-    if not ctx.args and not any([testnet_variant, ls]):
-        click.echo(ctx.get_help())
-        ctx.exit(1)
-
     retval = cli_create.cmd_create(
         testnet_variant=testnet_variant,
         comment=comment,
