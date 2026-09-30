@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR="$(readlink -m "${0%/*}")"
+
+# The hard fork waits two epochs, i.e. days with the Mainnet epoch length.
+case "${HF_TO_DIJKSTRA:-}" in
+  1 | [Tt][Rr][Uu][Ee] | [Yy][Ee][Ss] | [Oo][Nn] | [Ee][Nn][Aa][Bb][Ll][Ee][Dd] )
+    echo "HF_TO_DIJKSTRA is not supported by mainnet_fast" >&2
+    exit 1
+    ;;
+esac
+
 export AUTORESTART_NODES="${AUTORESTART_NODES:-true}"
 export SUBMIT_DELAY="${SUBMIT_DELAY:-15}"
 exec "${SCRIPT_DIR}/common-start-fast" "$@"
