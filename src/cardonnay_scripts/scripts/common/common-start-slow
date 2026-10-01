@@ -963,17 +963,22 @@ hf_to_conway() {
 }
 
 hf_to_conway_pv10() {
-  local cur_epoch="${1:?}"
-
   _update_cost_model_in_pv9
+
+  # Read after the votes are confirmed, as an epoch read before submitting may predate
+  # an epoch boundary. The cost model is enacted two epochs after the votes landed.
+  local cost_model_vote_epoch
+  cost_model_vote_epoch="$(get_epoch)"
 
   if [ "$PROTOCOL_VERSION" -lt 10 ]; then
     echo "Skipping HF to Conway PV10 as PROTOCOL_VERSION is set to $PROTOCOL_VERSION"
-    _wait_pv9_cost_model_enacted "$cur_epoch"
+    _wait_pv9_cost_model_enacted "$cost_model_vote_epoch"
     return
   fi
 
-  wait_for_epoch "$((cur_epoch + 1))"
+  # Keep the HF out of the cost model's ratification round. A ratified HF delays all
+  # other actions, so the cost model would miss its expected enactment epoch.
+  wait_for_epoch "$((cost_model_vote_epoch + 1))"
 
   echo "Submitting hard fork proposal to update to Conway PV10"
   local pv10_hf_base="${STATE_CLUSTER}/governance_data/hardfork_pv10"
@@ -988,10 +993,13 @@ hf_to_conway_pv10() {
   vote_on_action "$PV10_HF_ACTION_TXID" "$pv10_hf_action" "yes"
   submit_votes "${pv10_hf_base}_votes" "$pv10_hf_action"
 
-  _wait_pv9_cost_model_enacted "$cur_epoch"
+  local hf_vote_epoch
+  hf_vote_epoch="$(get_epoch)"
+
+  _wait_pv9_cost_model_enacted "$cost_model_vote_epoch"
 
   echo "Waiting for Conway PV10 to start"
-  wait_for_epoch "$((cur_epoch + 3))"
+  wait_for_enactment "$hf_vote_epoch"
 
   save_protocol_params "$PPARAMS_FILE"
   local cur_protver
@@ -1004,8 +1012,6 @@ hf_to_conway_pv11() {
     echo "Skipping HF to Conway PV11 as PROTOCOL_VERSION is set to $PROTOCOL_VERSION"
     return
   fi
-
-  local cur_epoch="${1:?}"
 
   echo "Submitting hard fork proposal to update to Conway PV11"
 
@@ -1022,7 +1028,7 @@ hf_to_conway_pv11() {
   submit_votes "${pv11_hf_base}_votes" "$pv11_hf_action"
 
   echo "Waiting for Conway PV11 to start"
-  wait_for_epoch "$((cur_epoch + 2))"
+  wait_for_enactment
 
   save_protocol_params "$PPARAMS_FILE"
   local cur_protver
@@ -1036,7 +1042,7 @@ hf_to_dijkstra() {
     return
   fi
 
-  hard_fork_to_dijkstra "${1:?}" "${PV11_HF_ACTION_TXID:?"Must exist"}"
+  hard_fork_to_dijkstra "${PV11_HF_ACTION_TXID:?"Must exist"}"
 }
 
 main() {
@@ -1069,9 +1075,9 @@ main() {
   hf_to_babbage "$(get_epoch)"
   hf_to_babbage_pv8 "$(get_epoch)"
   hf_to_conway "$(get_epoch)"
-  hf_to_conway_pv10 "$(get_epoch)"
-  hf_to_conway_pv11 "$(get_epoch)"
-  hf_to_dijkstra "$(get_epoch)"
+  hf_to_conway_pv10
+  hf_to_conway_pv11
+  hf_to_dijkstra
 
   use_genesis_mode
 

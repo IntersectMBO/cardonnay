@@ -525,6 +525,18 @@ submit_votes() {
   fi
 }
 
+# Wait for enactment of a governance action whose votes `submit_votes` just confirmed.
+# The action is enacted two epochs after the votes landed. Without the optional vote
+# epoch argument, the epoch is read only now, because one read before submitting may
+# predate an epoch boundary.
+wait_for_enactment() {
+  local vote_epoch="${1:-}"
+  if [ -z "$vote_epoch" ]; then
+    vote_epoch="$(get_epoch)"
+  fi
+  wait_for_epoch "$((vote_epoch + 2))"
+}
+
 reregister_pools_with_bls() {
   : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
   : "${FAUCET_ADDR:?FAUCET_ADDR is required}"
@@ -595,8 +607,7 @@ hard_fork_to_dijkstra() {
   : "${STATE_CLUSTER:?STATE_CLUSTER is required}"
   : "${PPARAMS_FILE:?PPARAMS_FILE is required}"
 
-  local cur_epoch="${1:?}"
-  local prev_txid="${2:-}"
+  local prev_txid="${1:-}"
 
   echo "Submitting hard fork proposal to update to Dijkstra PV12"
 
@@ -613,7 +624,7 @@ hard_fork_to_dijkstra() {
   submit_votes "${pv12_hf_base}_votes" "$pv12_hf_action"
 
   echo "Waiting for Dijkstra PV12 to start"
-  wait_for_epoch "$((cur_epoch + 2))"
+  wait_for_enactment
 
   save_protocol_params "$PPARAMS_FILE"
   local cur_protver

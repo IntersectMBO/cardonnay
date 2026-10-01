@@ -683,7 +683,7 @@ register_entities() {
 hf_to_dijkstra() {
   hf_to_dijkstra_enabled || return 0
 
-  hard_fork_to_dijkstra "${1:?}"
+  hard_fork_to_dijkstra
 }
 
 main() {
@@ -704,7 +704,7 @@ main() {
   start_cluster_nodes
   start_optional_services
   register_entities
-  hf_to_dijkstra "$(get_epoch)"
+  hf_to_dijkstra
   use_genesis_mode
   setup_tx_generator "$TX_GENERATOR_MIN_FUNDS"
   setup_tx_centrifuge
