@@ -66,6 +66,15 @@ initialize_globals() {
     exit 1
   fi
 
+  # The cluster always hard forks at least to Mary (PV4) and can reach at most
+  # Dijkstra PV12. Reject other values instead of silently ending at a
+  # different protocol version.
+  if ! [[ "$PROTOCOL_VERSION" =~ ^[0-9]+$ ]] \
+    || [ "$PROTOCOL_VERSION" -lt 4 ] || [ "$PROTOCOL_VERSION" -gt 12 ]; then
+    echo "Unsupported \`PROTOCOL_VERSION\`: '$PROTOCOL_VERSION', must be an integer from 4 to 12" >&2
+    exit 1
+  fi
+
   case "${UTXO_BACKEND:=""}" in
     "" | mem | disk | disklmdb | empty)
       ;;
