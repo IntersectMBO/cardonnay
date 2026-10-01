@@ -569,11 +569,12 @@ create_legacy_update_proposal() {
   local era="${1:?}"
   local proposal_file="${2:?}"
   local major_version="${3:?}"
-  shift 3
+  local proposal_epoch="${4:?}"
+  shift 4
 
   cardano_cli_log compatible "$era" governance action create-protocol-parameters-update \
     --out-file "$proposal_file" \
-    --epoch "$(get_epoch)" \
+    --epoch "$proposal_epoch" \
     "${GENESIS_VERIFICATION[@]}" \
     --protocol-major-version "$major_version" \
     --protocol-minor-version 0 \
@@ -616,8 +617,7 @@ do_legacy_hf() {
   local from_era="${1:?}"
   local to_era="${2:?}"
   local major_version="${3:?}"
-  local wait_epoch="${4:?}"
-  shift 4
+  shift 3
 
   local proposal_file="${STATE_CLUSTER}/shelley/update-proposal-${to_era,,}.proposal"
   local tx_base="${STATE_CLUSTER}/shelley/update-proposal-${to_era,,}"
@@ -625,11 +625,16 @@ do_legacy_hf() {
   sleep "$PROPOSAL_DELAY"
   echo "Submitting update proposal to transfer to $to_era"
 
-  create_legacy_update_proposal "$from_era" "$proposal_file" "$major_version" "$@"
+  # The proposal is adopted at the end of the epoch it targets, so the epoch must be read
+  # right before submitting, not before the delay above.
+  local proposal_epoch
+  proposal_epoch="$(get_epoch)"
+
+  create_legacy_update_proposal "$from_era" "$proposal_file" "$major_version" "$proposal_epoch" "$@"
   submit_legacy_update_proposal "$from_era" "$proposal_file" "$tx_base"
 
   echo "Waiting for $to_era era to start"
-  wait_for_epoch "$wait_epoch"
+  wait_for_epoch "$((proposal_epoch + 1))"
 }
 
 _register_governance_in_conway() {
@@ -809,20 +814,11 @@ hf_to_shelley() {
 }
 
 hf_to_allegra() {
-  local cur_epoch="${1:?}"
-
   sleep "$PROPOSAL_DELAY"
   echo "Submitting update proposal to transfer to Allegra, transferring funds to pool owners, registering pools and delegations"
 
   local allegra_proposal_file="${STATE_CLUSTER}/shelley/update-proposal-allegra.proposal"
   local allegra_tx_base="${STATE_CLUSTER}/shelley/transfer-register-delegate"
-
-  cardano_cli_log compatible shelley governance action create-protocol-parameters-update \
-    --out-file "$allegra_proposal_file" \
-    --epoch "$(get_epoch)" \
-    "${GENESIS_VERIFICATION[@]}" \
-    --protocol-major-version 3 \
-    --protocol-minor-version 0
 
   local deposits="$((POOL_DEPOSIT + (2 * KEY_DEPOSIT) ))"
   local needed_amount="$(( (POOL_PLEDGE + deposits) * NUM_POOLS ))"
@@ -831,6 +827,18 @@ hf_to_allegra() {
   local txin_amount=0
 
   get_txins "$FAUCET_ADDR" "$stop_txin_amount" txins txin_amount
+
+  # The proposal is adopted at the end of the epoch it targets, so the epoch must be read
+  # right before submitting, not before the delay above.
+  local proposal_epoch
+  proposal_epoch="$(get_epoch)"
+
+  cardano_cli_log compatible shelley governance action create-protocol-parameters-update \
+    --out-file "$allegra_proposal_file" \
+    --epoch "$proposal_epoch" \
+    "${GENESIS_VERIFICATION[@]}" \
+    --protocol-major-version 3 \
+    --protocol-minor-version 0
 
   local txout_amount="$((txin_amount - stop_txin_amount))"
 
@@ -876,13 +884,12 @@ hf_to_allegra() {
   fi
 
   echo "Waiting for Allegra era to start"
-  wait_for_epoch "$((cur_epoch + 1))"
+  wait_for_epoch "$((proposal_epoch + 1))"
   wait_for_era "Allegra"
 }
 
 hf_to_mary() {
-  local cur_epoch="${1:?}"
-  do_legacy_hf "allegra" "Mary" 4 "$((cur_epoch + 1))" --decentralization-parameter 0
+  do_legacy_hf "allegra" "Mary" 4 --decentralization-parameter 0
   wait_for_era "Mary"
 }
 
@@ -892,8 +899,7 @@ hf_to_alonzo() {
     return
   fi
 
-  local cur_epoch="${1:?}"
-  do_legacy_hf "mary" "Alonzo" 5 "$((cur_epoch + 1))"
+  do_legacy_hf "mary" "Alonzo" 5
   wait_for_era "Alonzo"
 }
 
@@ -903,9 +909,7 @@ hf_to_alonzo_pv6() {
     return
   fi
 
-  local cur_epoch="${1:?}"
-
-  do_legacy_hf "alonzo" "Alonzo-PV6" 6 "$((cur_epoch + 1))"
+  do_legacy_hf "alonzo" "Alonzo-PV6" 6
 
   if save_protocol_params "$PPARAMS_FILE"; then
     local cur_protver
@@ -920,9 +924,7 @@ hf_to_babbage() {
     return
   fi
 
-  local cur_epoch="${1:?}"
-
-  do_legacy_hf "alonzo" "Babbage" 7 "$((cur_epoch + 1))"
+  do_legacy_hf "alonzo" "Babbage" 7
   wait_for_era "Babbage"
 }
 
@@ -932,9 +934,7 @@ hf_to_babbage_pv8() {
     return
   fi
 
-  local cur_epoch="${1:?}"
-
-  do_legacy_hf "babbage" "Babbage-PV8" 8 "$((cur_epoch + 1))"
+  do_legacy_hf "babbage" "Babbage-PV8" 8
 
   if save_protocol_params "$PPARAMS_FILE"; then
     local cur_protver
@@ -949,9 +949,7 @@ hf_to_conway() {
     return
   fi
 
-  local cur_epoch="${1:?}"
-
-  do_legacy_hf "babbage" "Conway" 9 "$((cur_epoch + 1))"
+  do_legacy_hf "babbage" "Conway" 9
   wait_for_era "Conway"
 
   save_protocol_params "$PPARAMS_FILE"
@@ -1068,13 +1066,13 @@ main() {
 
   start_optional_services
 
-  hf_to_allegra "$(get_epoch)"
-  hf_to_mary "$(get_epoch)"
-  hf_to_alonzo "$(get_epoch)"
-  hf_to_alonzo_pv6 "$(get_epoch)"
-  hf_to_babbage "$(get_epoch)"
-  hf_to_babbage_pv8 "$(get_epoch)"
-  hf_to_conway "$(get_epoch)"
+  hf_to_allegra
+  hf_to_mary
+  hf_to_alonzo
+  hf_to_alonzo_pv6
+  hf_to_babbage
+  hf_to_babbage_pv8
+  hf_to_conway
   hf_to_conway_pv10
   hf_to_conway_pv11
   hf_to_dijkstra
