@@ -1067,6 +1067,7 @@ edit_genesis_conf() {
   local node_ver node_v11
   node_ver="$(version_parse "$(get_node_version || echo 0.0.0)")"
   node_v11="$(version_parse 11.0.0)"
+  node_v12="$(version_parse 12.0.0)"
 
   jq \
     --arg byron_hash "${BYRON_GENESIS_HASH}" \
@@ -1077,6 +1078,7 @@ edit_genesis_conf() {
     --argjson prot_ver "${PROTOCOL_VERSION}" \
     --argjson node_ver "$node_ver" \
     --argjson node_v11 "$node_v11" \
+    --argjson node_v12 "$node_v12" \
     --argjson enable_experimental "$(is_truthy "${ENABLE_EXPERIMENTAL:-}" && echo true || echo false)" '
     .ByronGenesisHash = $byron_hash
     | .ShelleyGenesisHash = $shelley_hash
@@ -1090,7 +1092,7 @@ edit_genesis_conf() {
       end
     | if $enable_experimental
         or ($prot_ver >= 11 and $node_ver < $node_v11)
-        or ($prot_ver >= 12 and $node_ver >= $node_v11)
+        or ($prot_ver >= 12 and $node_ver < $node_v12)
       then
         (.ExperimentalProtocolsEnabled = true
           | .ExperimentalHardForksEnabled = true)
