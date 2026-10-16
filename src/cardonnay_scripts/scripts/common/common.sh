@@ -1099,6 +1099,11 @@ edit_genesis_conf() {
       else
         .
       end
+    | if $prot_ver >= 12 then
+        .LeiosMinOfferLead = 30
+      else
+        .
+      end
     ' "$conf" > "${conf}.tmp.json"
   mv -f "${conf}.tmp.json" "$conf"
 }
