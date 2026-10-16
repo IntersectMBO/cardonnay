@@ -1056,7 +1056,7 @@ create_committee_keys_in_genesis() {
   mv -f "${STATE_CLUSTER}/shelley/genesis.conway.tmp.json" "${STATE_CLUSTER}/shelley/genesis.conway.json"
 }
 
-edit_genesis_conf() {
+edit_conf_common() {
   : "${BYRON_GENESIS_HASH:?BYRON_GENESIS_HASH is required}"
   : "${SHELLEY_GENESIS_HASH:?SHELLEY_GENESIS_HASH is required}"
   : "${ALONZO_GENESIS_HASH:?ALONZO_GENESIS_HASH is required}"
