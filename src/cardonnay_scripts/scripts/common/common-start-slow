@@ -257,7 +257,7 @@ edit_node_configs() {
 
     cp "$conf" "$conf_target"
 
-    edit_genesis_conf "$conf_target"
+    edit_conf_common "$conf_target"
     edit_utxo_backend_conf "$conf_target" "$node_name" "$pool_num"
   done
 }
