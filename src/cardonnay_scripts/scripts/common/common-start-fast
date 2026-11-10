@@ -494,9 +494,9 @@ inject_pools_into_genesis() {
 
   # The pool parameters exist only as CBOR inside the registration certificates.
   # Wrap the certificates in a throw-away Tx body, the only input that
-  # `debug transaction view` accepts, to get them as JSON. That is the ledger's
-  # own encoding of `StakePoolParams`, which is what the genesis parser expects,
-  # so the parameters can be dropped into the genesis entries verbatim.
+  # `debug transaction view` accepts, to get them as JSON. Its friendly pool
+  # encoding is not the ledger encoding used by the genesis parser, so translate
+  # it below before updating the genesis entries.
   cardano_cli_log "$reg_era" transaction build-raw \
     --tx-in "0000000000000000000000000000000000000000000000000000000000000000#0" \
     --fee 0 \
@@ -514,8 +514,31 @@ inject_pools_into_genesis() {
     def pool_params:
       [$params[0].certificates[]? | .["Pool registration"]?["pool params"]? | select(. != null)];
 
+    # Match friendly parameters by VRF hash, since their pool ID is bech32,
+    # whereas genesis pool IDs are hex. Keep the genesis pool ID and reward
+    # account: the registration certificate uses the same generated keys.
+    def genesis_params(pools):
+      if has("poolId") then .
+      else
+        . as $p
+        | [pools[] | select(.vrf == $p["vrf key hash"])] as $matches
+        | if ($matches | length) != 1
+          then error("expected one genesis pool for VRF hash \($p["vrf key hash"])")
+          else $matches[0] + {
+            pledge: $p.pledge,
+            cost: $p.cost,
+            margin: ($p.margin | split("/") | (.[0] | tonumber) / (.[1] | tonumber)),
+            owners: $p.owners,
+            relays: $p.relays,
+            metadata: $p.metadata,
+            blsKey: $p["bls key"]
+          }
+          end
+      end;
+
     def patch(f):
-      reduce pool_params[] as $p (.;
+      getpath(f) as $pools
+      | reduce (pool_params[] | genesis_params($pools)) as $p (.;
         if (getpath(f)[$p.poolId] | type) != "object"
         then error("pool \($p.poolId) is not registered in the genesis")
         else setpath(f + [$p.poolId]; $p)
