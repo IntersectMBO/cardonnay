@@ -10,6 +10,7 @@ trap 'echo "Error at line $LINENO in ${BASH_SOURCE[0]}" >&2' ERR
 
 readonly PROTOCOL_VERSION="${PROTOCOL_VERSION:-11}"
 readonly NUM_BFT_NODES=1
+readonly NUM_GENESIS_KEYS=3
 readonly NUM_CC=5
 readonly NUM_DREPS=5
 readonly TX_SUBMISSION_DELAY=60
@@ -17,7 +18,6 @@ readonly SUBMIT_DELAY="${SUBMIT_DELAY:-5}"
 readonly POOL_PLEDGE=1000000000000
 readonly DREP_DELEGATED=500000000000
 readonly FEE=5000000
-readonly BYRON_INIT_SUPPLY=10020000000
 readonly TX_GENERATOR_MIN_FUNDS=5000000000000000
 readonly TX_FIREHOSE_MIN_FUNDS=5000000000000
 
@@ -54,6 +54,7 @@ initialize_globals() {
   SOCKET_PATH="$(readlink -m "$CARDANO_NODE_SOCKET_PATH")"
   readonly SOCKET_PATH
   readonly STATE_CLUSTER="${SOCKET_PATH%/*}"
+  readonly TESTNET_DATA_DIR="${STATE_CLUSTER}/testnet_data"
 
   if [ "$PWD" = "$STATE_CLUSTER" ]; then
     echo "Please run this script from outside of '$STATE_CLUSTER'" >&2
@@ -114,8 +115,6 @@ initialize_globals() {
   done
   readonly UTXO_BACKENDS
 
-  SECURITY_PARAM="$(jq '.securityParam' < "${SCRIPT_DIR}/genesis.spec.json")"
-  readonly SECURITY_PARAM
   NETWORK_MAGIC="$(jq '.networkMagic' < "${SCRIPT_DIR}/genesis.spec.json")"
   readonly NETWORK_MAGIC
   MAX_SUPPLY="$(jq '.maxLovelaceSupply' < "${SCRIPT_DIR}/genesis.spec.json")"
@@ -126,12 +125,11 @@ initialize_globals() {
   fi
   readonly POOL_COST
 
-  DELEG_MAGIC_VALUE=3340000000000000
-  readonly DELEG_MAGIC_VALUE
-  DELEG_SUPPLY="$((POOL_PLEDGE * NUM_POOLS + DELEG_MAGIC_VALUE))"
+  # Bootstrap each pool with three times its pledge. create-testnet-data retains
+  # 10% of each supply allocation in reserves, so gross up the delegated amount.
+  # Unlike create-staked, this does not depend on the nondelegated supply.
+  DELEG_SUPPLY="$((POOL_PLEDGE * NUM_POOLS * 3 * 10 / 9))"
   readonly DELEG_SUPPLY
-  NONDELEG_SUPPLY="$(( (MAX_SUPPLY - DELEG_SUPPLY) * 8 / 10))"
-  readonly NONDELEG_SUPPLY
 
   # shellcheck disable=SC1091
   source "${SCRIPT_DIR}/common.sh"
@@ -158,26 +156,16 @@ initialize_globals() {
 }
 
 create_genesis() {
-  local start_time_shelley start_time
+  local start_time_shelley start_time i key era index
 
   start_time_shelley="$(date --utc +"%Y-%m-%dT%H:%M:%SZ" --date="5 seconds")"
   start_time="$(date +%s --date="$start_time_shelley")"
   echo "$start_time" > "${STATE_CLUSTER}/cluster_start_time"
 
-  cardano_cli_log byron genesis genesis \
-    --protocol-magic "$NETWORK_MAGIC" \
-    --k "$SECURITY_PARAM" \
-    --n-poor-addresses 0 \
-    --n-delegate-addresses "$NUM_POOLS" \
-    --total-balance "$BYRON_INIT_SUPPLY" \
-    --delegate-share 1 \
-    --avvm-entry-count 0 \
-    --avvm-entry-balance 0 \
-    --protocol-parameters-file "${STATE_CLUSTER}/byron-params.json" \
-    --genesis-output-dir "${STATE_CLUSTER}/byron" \
-    --start-time "$start_time"
-
-  mv "${STATE_CLUSTER}/byron-params.json" "${STATE_CLUSTER}/byron/params.json"
+  jq --argjson prot_ver "$(get_start_protocol_version)" '
+    .protocolParams.protocolVersion.major = $prot_ver
+    ' "${TESTNET_DATA_DIR}/genesis.spec.json" > "${TESTNET_DATA_DIR}/genesis.spec.tmp.json"
+  mv "${TESTNET_DATA_DIR}/genesis.spec.tmp.json" "${TESTNET_DATA_DIR}/genesis.spec.json"
 
   # At genesis, the ledger only accepts cost models with the length each Plutus version
   # had when it was first introduced (PlutusV1: 166, PlutusV2: 175, PlutusV3: 251).
@@ -186,42 +174,58 @@ create_genesis() {
   jq '
     .costModels.PlutusV1 |= .[0:166]
     | .costModels.PlutusV2 |= .[0:175]
-    ' "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.json" > "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.tmp.json"
-  mv "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.tmp.json" "${STATE_CLUSTER}/create_staked/genesis.alonzo.spec.json"
+    ' "${TESTNET_DATA_DIR}/genesis.alonzo.spec.json" > "${TESTNET_DATA_DIR}/genesis.alonzo.spec.tmp.json"
+  mv "${TESTNET_DATA_DIR}/genesis.alonzo.spec.tmp.json" "${TESTNET_DATA_DIR}/genesis.alonzo.spec.json"
   jq '
     .plutusV3CostModel |= .[0:251]
-    ' "${STATE_CLUSTER}/create_staked/genesis.conway.spec.json" > "${STATE_CLUSTER}/create_staked/genesis.conway.spec.tmp.json"
-  mv "${STATE_CLUSTER}/create_staked/genesis.conway.spec.tmp.json" "${STATE_CLUSTER}/create_staked/genesis.conway.spec.json"
+    ' "${TESTNET_DATA_DIR}/genesis.conway.spec.json" > "${TESTNET_DATA_DIR}/genesis.conway.spec.tmp.json"
+  mv "${TESTNET_DATA_DIR}/genesis.conway.spec.tmp.json" "${TESTNET_DATA_DIR}/genesis.conway.spec.json"
 
-  cardano_cli_log latest genesis create-staked \
-    --genesis-dir "${STATE_CLUSTER}/create_staked" \
+  # Governance is deliberately still initialized by the existing helpers and Tx:
+  # the CLI's committee defaults and DRep stake distribution differ from ours.
+  cardano_cli_log latest genesis create-testnet-data \
+    --spec-shelley "${TESTNET_DATA_DIR}/genesis.spec.json" \
+    --spec-alonzo "${TESTNET_DATA_DIR}/genesis.alonzo.spec.json" \
+    --spec-conway "${TESTNET_DATA_DIR}/genesis.conway.spec.json" \
+    --spec-dijkstra "${TESTNET_DATA_DIR}/genesis.dijkstra.spec.json" \
     --testnet-magic "$NETWORK_MAGIC" \
-    --gen-pools "$NUM_POOLS" \
-    --gen-utxo-keys 2 \
-    --supply "$NONDELEG_SUPPLY" \
-    --gen-stake-delegs "$NUM_POOLS" \
-    --supply-delegated "$DELEG_SUPPLY" \
-    --start-time "$start_time_shelley"
+    --genesis-keys "$NUM_GENESIS_KEYS" \
+    --pools "$NUM_POOLS" \
+    --utxo-keys 2 \
+    --total-supply "$MAX_SUPPLY" \
+    --transient-stake-delegators "$NUM_POOLS" \
+    --delegated-supply "$DELEG_SUPPLY" \
+    --committee-keys 0 \
+    --drep-keys 0 \
+    --start-time "$start_time_shelley" \
+    --out-dir "$TESTNET_DATA_DIR"
 
-  mv "${STATE_CLUSTER}/create_staked/delegate-keys" "${STATE_CLUSTER}/shelley/delegate-keys"
-  mv "${STATE_CLUSTER}/create_staked/genesis-keys" "${STATE_CLUSTER}/shelley/genesis-keys"
+  # Keep the established state-cluster layout for scripts and external tools.
+  mv "${TESTNET_DATA_DIR}/byron-gen-command" "${STATE_CLUSTER}/byron"
+  mv "${TESTNET_DATA_DIR}/byron-genesis.json" "${STATE_CLUSTER}/byron/genesis.json"
+  mv "${TESTNET_DATA_DIR}/byron.genesis.spec.json" "${STATE_CLUSTER}/byron/params.json"
+  mv "${TESTNET_DATA_DIR}/shelley-genesis.json" "${STATE_CLUSTER}/shelley/genesis.json"
+  for era in alonzo conway dijkstra; do
+    mv "${TESTNET_DATA_DIR}/${era}-genesis.json" "${STATE_CLUSTER}/shelley/genesis.${era}.json"
+  done
+  mv "${TESTNET_DATA_DIR}"/genesis*.spec.json "${STATE_CLUSTER}/shelley/"
 
-  jq \
-    --argjson max_supply "$MAX_SUPPLY" \
-    --argjson prot_ver "$(get_start_protocol_version)" '
-    .protocolParams.protocolVersion.major = $prot_ver
-    | .maxLovelaceSupply = $max_supply
-    ' "${STATE_CLUSTER}/create_staked/genesis.json" > "${STATE_CLUSTER}/shelley/genesis.json"
-
-  rm -f "${STATE_CLUSTER}/create_staked/genesis.json"
-
-  mv "$STATE_CLUSTER"/create_staked/genesis*.json "${STATE_CLUSTER}/shelley/"
-
-  if [ ! -e "${STATE_CLUSTER}/shelley/genesis.dijkstra.json" ] \
-    && [ -e "${STATE_CLUSTER}/shelley/genesis.dijkstra.spec.json" ]; then
-    cp "${STATE_CLUSTER}/shelley/genesis.dijkstra.spec.json" \
-      "${STATE_CLUSTER}/shelley/genesis.dijkstra.json"
-  fi
+  mkdir -p "${STATE_CLUSTER}/shelley/"{genesis-keys,delegate-keys}
+  for ((i=1; i<=NUM_GENESIS_KEYS; i++)); do
+    for key in skey vkey; do
+      mv "${TESTNET_DATA_DIR}/genesis-keys/genesis${i}/key.${key}" "${STATE_CLUSTER}/shelley/genesis-keys/genesis${i}.${key}"
+      mv "${TESTNET_DATA_DIR}/delegate-keys/delegate${i}/key.${key}" "${STATE_CLUSTER}/shelley/delegate-keys/delegate${i}.${key}"
+      mv "${TESTNET_DATA_DIR}/delegate-keys/delegate${i}/vrf.${key}" "${STATE_CLUSTER}/shelley/delegate-keys/delegate${i}.vrf.${key}"
+      mv "${TESTNET_DATA_DIR}/delegate-keys/delegate${i}/kes.${key}" "${STATE_CLUSTER}/shelley/delegate-keys/delegate${i}.kes.${key}"
+    done
+    mv "${TESTNET_DATA_DIR}/delegate-keys/delegate${i}/opcert.cert" "${STATE_CLUSTER}/shelley/delegate-keys/opcert${i}.cert"
+    mv "${TESTNET_DATA_DIR}/delegate-keys/delegate${i}/opcert.counter" "${STATE_CLUSTER}/shelley/delegate-keys/delegate${i}.counter"
+  done
+  for ((i=1; i<=NUM_POOLS; i++)); do
+    printf -v index '%03d' "$((i - 1))"
+    mv "${TESTNET_DATA_DIR}/pools-keys/pool${i}/byron-delegate.key" "${STATE_CLUSTER}/byron/delegate-keys.${index}.key"
+    mv "${TESTNET_DATA_DIR}/pools-keys/pool${i}/byron-delegation.cert" "${STATE_CLUSTER}/byron/delegation-cert.${index}.json"
+  done
 }
 
 get_genesis_data() {
@@ -259,10 +263,10 @@ get_genesis_hashes() {
 }
 
 create_genesis_utxos() {
-  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo1.skey" "${STATE_CLUSTER}/shelley/genesis-utxo.skey"
-  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo1.vkey" "${STATE_CLUSTER}/shelley/genesis-utxo.vkey"
-  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo2.skey" "${STATE_CLUSTER}/shelley/genesis-utxo2.skey"
-  mv "${STATE_CLUSTER}/create_staked/utxo-keys/utxo2.vkey" "${STATE_CLUSTER}/shelley/genesis-utxo2.vkey"
+  mv "${TESTNET_DATA_DIR}/utxo-keys/utxo1/utxo.skey" "${STATE_CLUSTER}/shelley/genesis-utxo.skey"
+  mv "${TESTNET_DATA_DIR}/utxo-keys/utxo1/utxo.vkey" "${STATE_CLUSTER}/shelley/genesis-utxo.vkey"
+  mv "${TESTNET_DATA_DIR}/utxo-keys/utxo2/utxo.skey" "${STATE_CLUSTER}/shelley/genesis-utxo2.skey"
+  mv "${TESTNET_DATA_DIR}/utxo-keys/utxo2/utxo.vkey" "${STATE_CLUSTER}/shelley/genesis-utxo2.vkey"
   cardano_cli_log conway address build --payment-verification-key-file \
     "${STATE_CLUSTER}/shelley/genesis-utxo.vkey" \
     --out-file "${STATE_CLUSTER}/shelley/genesis-utxo.addr" \
@@ -272,7 +276,8 @@ create_genesis_utxos() {
     --out-file "${STATE_CLUSTER}/shelley/genesis-utxo2.addr" \
     --testnet-magic "$NETWORK_MAGIC"
 
-  mv "${STATE_CLUSTER}/create_staked/stake-delegator-keys" "${STATE_CLUSTER}/shelley/stake-delegator-keys"
+  # create-staked also left this directory empty; bootstrap stake is transient.
+  mkdir -p "${STATE_CLUSTER}/shelley/stake-delegator-keys"
 
   FAUCET_ADDR="$(<"${STATE_CLUSTER}/shelley/genesis-utxo.addr")"
   readonly FAUCET_ADDR
@@ -323,22 +328,23 @@ create_bft_nodes_files() {
 
 _create_pool_node_keys() {
   local pool_ix="${1:?}"
+  local pool_dir="${TESTNET_DATA_DIR}/pools-keys/pool${pool_ix}"
 
   mkdir -p "${STATE_CLUSTER}/nodes/node-pool$pool_ix"
-  mv "${STATE_CLUSTER}/create_staked/pools/cold${pool_ix}.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.skey"
-  mv "${STATE_CLUSTER}/create_staked/pools/cold${pool_ix}.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey"
+  mv "${pool_dir}/cold.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.skey"
+  mv "${pool_dir}/cold.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.vkey"
 
-  mv "${STATE_CLUSTER}/create_staked/pools/kes${pool_ix}.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/kes.skey"
-  mv "${STATE_CLUSTER}/create_staked/pools/kes${pool_ix}.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/kes.vkey"
+  mv "${pool_dir}/kes.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/kes.skey"
+  mv "${pool_dir}/kes.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/kes.vkey"
 
-  mv "${STATE_CLUSTER}/create_staked/pools/opcert${pool_ix}.cert" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/op.cert"
-  mv "${STATE_CLUSTER}/create_staked/pools/opcert${pool_ix}.counter" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.counter"
+  mv "${pool_dir}/opcert.cert" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/op.cert"
+  mv "${pool_dir}/opcert.counter" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/cold.counter"
 
-  mv "${STATE_CLUSTER}/create_staked/pools/staking-reward${pool_ix}.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.skey"
-  mv "${STATE_CLUSTER}/create_staked/pools/staking-reward${pool_ix}.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey"
+  mv "${pool_dir}/staking-reward.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.skey"
+  mv "${pool_dir}/staking-reward.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/reward.vkey"
 
-  mv "${STATE_CLUSTER}/create_staked/pools/vrf${pool_ix}.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.skey"
-  mv "${STATE_CLUSTER}/create_staked/pools/vrf${pool_ix}.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey"
+  mv "${pool_dir}/vrf.skey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.skey"
+  mv "${pool_dir}/vrf.vkey" "${STATE_CLUSTER}/nodes/node-pool${pool_ix}/vrf.vkey"
 
   if [ "$PROTOCOL_VERSION" -ge 12 ] && has_bls_support; then
     cardano_cli_log dijkstra node key-gen-BLS \
@@ -711,7 +717,7 @@ hf_to_dijkstra() {
 
 main() {
   initialize_globals
-  setup_state_cluster "${STATE_CLUSTER}/create_staked"
+  setup_state_cluster "$TESTNET_DATA_DIR"
   configure_supervisor "${AUTORESTART_NODES:-false}"
   create_genesis
   create_committee_keys_in_genesis
