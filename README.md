@@ -115,6 +115,15 @@ source completions/cardonnay.bash-completion
 
 ---
 
+## Unit tests
+
+With the virtual environment activated and `cardano-cli`, `cardano-node` and `jq`
+on your `PATH`, run:
+
+```sh
+python -m unittest discover -s tests -v
+```
+
 ## ⚙️ db-sync (optional)
 
 db-sync is started automatically when `DBSYNC_SCHEMA_DIR` points to the
