@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77.0.3", "setuptools_scm[toml]"]
+requires = ["setuptools>=84.1.0", "setuptools_scm[toml]"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -23,8 +23,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "setuptools < 80.9",
-    "supervisor",
+    "supervisor >= 4.3.0",
     "click >= 7.0",
     "pygments >= 2.0",
     "pydantic >= 2.0",
