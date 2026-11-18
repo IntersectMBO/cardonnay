@@ -777,6 +777,8 @@ stderr_logfile=./${STATE_CLUSTER_NAME}/tx-firehose.stderr
 stdout_logfile=./${STATE_CLUSTER_NAME}/tx-firehose.stdout
 autostart=false
 autorestart=false
+stopasgroup=true
+killasgroup=true
 startsecs=5
 EoF
   fi
