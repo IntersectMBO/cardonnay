@@ -31,15 +31,16 @@ initialize() {
 }
 
 wait_for_socket() {
+  local socket="$1"
   for _ in {1..5}; do
-    if [ -S "${CARDANO_NODE_SOCKET_PATH:-}" ]; then
+    if [ -S "$socket" ]; then
       return 0
     fi
-    echo "Waiting for socket ${CARDANO_NODE_SOCKET_PATH:-} to be available..."
+    echo "Waiting for socket $socket to be available..."
     sleep 5
   done
 
-  echo "Socket ${CARDANO_NODE_SOCKET_PATH:-} is not available after waiting" >&2
+  echo "Socket $socket is not available after waiting" >&2
   exit 1
 }
 
@@ -57,7 +58,7 @@ run_tx_firehose() {
   max_errors="$(jq -r '.max_consecutive_errors' "$FIREHOSE_CONFIG")"
 
   while true; do
-    wait_for_socket
+    wait_for_socket "$socket"
 
     echo "Generating transactions..."
     if tx-firehose \
